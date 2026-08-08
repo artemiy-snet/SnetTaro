@@ -762,7 +762,8 @@ function openAISettings(){
   });
 }
 
-async function callClaudeReading(promptText, apiKey, model){
+async function callClaudeReading(promptOrMessages, apiKey, model){
+  const messages = typeof promptOrMessages === 'string' ? [{role:'user', content:promptOrMessages}] : promptOrMessages;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{
@@ -774,7 +775,7 @@ async function callClaudeReading(promptText, apiKey, model){
     body: JSON.stringify({
       model: model || 'claude-haiku-4-5-20251001',
       max_tokens: 1800,
-      messages: [{role:'user', content: promptText}]
+      messages
     })
   });
   const data = await res.json().catch(()=>null);
@@ -802,7 +803,102 @@ ${lines}
 — структурні патерни (наприклад, чи згруповані перевернуті карти в певній частині розкладу; чи повторюється якась масть чи число в ключових позиціях);
 — як карти логічно продовжують чи суперечать одна одній від позиції до позиції;
 — один цілісний сюжет наприкінці, що пов'язує все докупи.
-Тримайся психологічної, архетипної рамки (інструмент самоаналізу, а не пророцтво), без містичної патетики. Пиши природною українською, розбий на змістовні абзаци з короткими підзаголовками там, де це природно.`;
+Тримайся психологічної, архетипної рамки (інструмент самоаналізу, а не пророцтво), без містичної патетики. Пиши природною українською, розбий на змістовні абзаци з короткими підзаголовками там, де це природно. Далі людина зможе ставити тобі уточнювальні питання про цей розклад — відповідай так само по суті, спираючись на ці самі карти.`;
+}
+
+/* ---- voice: speech-to-text (mic) and text-to-speech (read aloud) via Web Speech API ---- */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null, listening = false;
+function speakText(text){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'uk-UA';
+    const voices = window.speechSynthesis.getVoices();
+    const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
+    if(ukVoice) u.voice = ukVoice;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+let aiChatHistory = [];
+
+function renderChatUI(loading){
+  const bubbles = aiChatHistory.map((m,i)=>{
+    const isUser = m.role==='user';
+    return `<div style="margin-bottom:10px;display:flex;${isUser?'justify-content:flex-end;':''}">
+      <div style="max-width:85%;">
+        <div style="padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.55;white-space:pre-wrap;
+          background:${isUser?'var(--ink)':'#efe6cf'};color:${isUser?'var(--parchment)':'var(--ink)'};">${escapeHtml(m.content)}</div>
+        ${!isUser?`<button class="speakBtn" data-i="${i}" style="margin-top:3px;background:none;border:none;color:var(--gold-dim);font-size:15px;cursor:pointer;padding:2px 4px;">🔊</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  const typingHTML = loading ? `<div style="color:var(--ink-soft);font-size:12px;margin-bottom:8px;">Claude пише…</div>` : '';
+  detail.innerHTML = `
+    <div class="dpos">Розмова про розклад</div>
+    <div id="chatMsgs" style="max-height:48vh;overflow-y:auto;margin:10px 0 8px;">${bubbles}${typingHTML}</div>
+    <div style="display:flex;gap:6px;align-items:flex-end;">
+      <textarea id="chatInput" rows="1" placeholder="Запитай щось про цей розклад…" style="flex:1;border:1px solid #d8cfb5;border-radius:8px;padding:10px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;resize:none;box-sizing:border-box;"></textarea>
+      ${SpeechRec?`<button id="btnMic" style="flex:0 0 auto;width:42px;height:42px;border-radius:50%;border:1px solid var(--gold-dim);background:#fbf9f2;font-size:17px;cursor:pointer;">🎤</button>`:''}
+      <button id="btnChatSend" style="flex:0 0 auto;width:42px;height:42px;border-radius:50%;border:none;background:var(--ink);color:var(--parchment);font-size:15px;cursor:pointer;">➤</button>
+    </div>
+    <div class="dactions" style="margin-top:14px;">
+      <button class="dclar" id="btnBackSum2">Назад до підсумку</button>
+      <button class="dclose" id="btnCloseChat">Закрити</button>
+    </div>
+  `;
+  overlay.classList.add('show');
+  const msgsEl = el('chatMsgs'); msgsEl.scrollTop = msgsEl.scrollHeight;
+  detail.querySelectorAll('.speakBtn').forEach(b=>{
+    b.addEventListener('click', ()=>speakText(aiChatHistory[parseInt(b.dataset.i,10)].content));
+  });
+  el('btnChatSend').addEventListener('click', sendChatFromInput);
+  el('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatFromInput(); } });
+  const micBtn = el('btnMic');
+  if(micBtn) micBtn.addEventListener('click', toggleMic);
+  el('btnBackSum2').addEventListener('click', ()=>showSummary('structured'));
+  el('btnCloseChat').addEventListener('click', ()=>{ overlay.classList.remove('show'); if(recognizer) recognizer.abort(); });
+}
+
+function toggleMic(){
+  if(!SpeechRec) return;
+  const micBtn = el('btnMic');
+  if(listening){ if(recognizer) recognizer.stop(); return; }
+  recognizer = new SpeechRec();
+  recognizer.lang = 'uk-UA';
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+  recognizer.onstart = ()=>{ listening=true; if(micBtn){ micBtn.style.background='var(--teal)'; micBtn.textContent='●'; } };
+  recognizer.onend = ()=>{ listening=false; const mb=el('btnMic'); if(mb){ mb.style.background='#fbf9f2'; mb.textContent='🎤'; } };
+  recognizer.onerror = ()=>{ listening=false; };
+  recognizer.onresult = e=>{
+    const text = e.results[0][0].transcript;
+    const input = el('chatInput');
+    if(input){ input.value = text; sendChatFromInput(); }
+  };
+  recognizer.start();
+}
+
+async function sendChatFromInput(){
+  const input = el('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value='';
+  aiChatHistory.push({role:'user', content:text});
+  renderChatUI(true);
+  try{
+    const key = await idbGetSetting('apiKey');
+    const model = (await idbGetSetting('model')) || 'claude-haiku-4-5-20251001';
+    const reply = await callClaudeReading(aiChatHistory, key, model);
+    aiChatHistory.push({role:'assistant', content:reply});
+    renderChatUI(false);
+    speakText(reply);
+  }catch(e){
+    aiChatHistory.push({role:'assistant', content:'⚠️ '+(e.message||'Помилка запиту.')});
+    renderChatUI(false);
+  }
 }
 
 async function runAIAnalysis(){
@@ -818,19 +914,11 @@ async function runAIAnalysis(){
   `;
   overlay.classList.add('show');
   try{
-    const text = await callClaudeReading(prompt, key, model);
-    const paragraphs = text.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
-    detail.innerHTML = `
-      <div class="dpos">Глибокий аналіз · ${model==='claude-sonnet-5'?'Sonnet':'Haiku'}</div>
-      <h2 style="font-family:var(--serif);margin:6px 0 12px;">${question?('« '+question+' »'):'Загальний огляд'}</h2>
-      ${paragraphs.map(p=>`<p style="margin-bottom:12px;white-space:pre-wrap;">${escapeHtml(p)}</p>`).join('')}
-      <div class="dactions">
-        <button class="dclar" id="btnBackSum">Назад до підсумку</button>
-        <button class="dclose" id="btnCloseAI">Закрити</button>
-      </div>
-    `;
-    el('btnBackSum').addEventListener('click', ()=>showSummary('structured'));
-    el('btnCloseAI').addEventListener('click', ()=>overlay.classList.remove('show'));
+    aiChatHistory = [{role:'user', content: prompt}];
+    const text = await callClaudeReading(aiChatHistory, key, model);
+    aiChatHistory.push({role:'assistant', content:text});
+    renderChatUI(false);
+    speakText(text);
   }catch(e){
     detail.innerHTML = `
       <div class="dpos">Не вдалося отримати аналіз</div>
