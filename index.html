@@ -209,6 +209,7 @@
   .dactions button{flex:1;min-width:120px;}
   .dclose{font-family:var(--serif);font-size:13.5px;background:var(--ink);color:var(--parchment);border:none;border-radius:8px;padding:12px;cursor:pointer;}
   .dclar{font-family:var(--sans);font-size:12.5px;background:none;border:1px solid var(--gold-dim);color:var(--ink);border-radius:8px;padding:12px;cursor:pointer;}
+  .word.reading{background:#57c7bd;color:#0d2624;border-radius:3px;box-shadow:0 0 0 1px #57c7bd;}
 
   #histPanel{display:none;background:var(--panel);border:1px solid #362c52;border-radius:12px;padding:14px;margin-bottom:14px;}
   #histPanel.show{display:block;}
@@ -840,26 +841,47 @@ function speechSanitize(t){
 function speakText(text){
   try{
     if(!('speechSynthesis' in window)) return;
+    const clean = speechSanitize(text);
+    if(!clean) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(speechSanitize(text));
-    u.lang = 'uk-UA';
-    const voices = window.speechSynthesis.getVoices();
-    const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
-    if(ukVoice) u.voice = ukVoice;
-    window.speechSynthesis.speak(u);
+    setTimeout(()=>{
+      try{
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang = 'uk-UA';
+        const voices = window.speechSynthesis.getVoices();
+        const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
+        if(ukVoice) u.voice = ukVoice;
+        window.speechSynthesis.speak(u);
+      }catch(e){}
+    }, 150);
   }catch(e){}
 }
 
 let aiChatHistory = [];
 
+let currentSpeakMsgIndex = null;
+
+function wrapWordsForHighlight(text){
+  let out = '';
+  const re = /\S+|\s+/g;
+  let m;
+  while((m = re.exec(text))){
+    if(/\S/.test(m[0])) out += `<span class="word" data-start="${m.index}">${escapeHtml(m[0])}</span>`;
+    else out += m[0];
+  }
+  return out;
+}
+
 function renderChatUI(loading){
   const bubbles = aiChatHistory.map((m,i)=>{
     const isUser = m.role==='user';
+    const isReading = i===currentSpeakMsgIndex;
+    const bodyHTML = isReading ? wrapWordsForHighlight(speechSanitize(m.content)) : escapeHtml(m.content);
     return `<div style="margin-bottom:10px;display:flex;${isUser?'justify-content:flex-end;':''}">
       <div style="max-width:85%;">
-        <div style="padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.55;white-space:pre-wrap;
-          background:${isUser?'var(--ink)':'#efe6cf'};color:${isUser?'var(--parchment)':'var(--ink)'};">${escapeHtml(m.content)}</div>
-        ${!isUser?`<button class="speakBtn" data-i="${i}" style="margin-top:3px;background:none;border:none;color:var(--gold-dim);font-size:15px;cursor:pointer;padding:2px 4px;">🔊</button>`:''}
+        <div class="msgbubble" data-msg="${i}" style="padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;
+          background:${isUser?'var(--ink)':'#efe6cf'};color:${isUser?'var(--parchment)':'var(--ink)'};">${bodyHTML}</div>
+        ${!isUser?`<button class="speakBtn" data-i="${i}" style="margin-top:4px;background:none;border:1px solid var(--gold-dim);color:var(--gold-dim);font-size:11px;border-radius:10px;padding:4px 9px;cursor:pointer;">${isReading?'⏸ Читає…':'🔊 Озвучити'}</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -880,14 +902,56 @@ function renderChatUI(loading){
   overlay.classList.add('show');
   const msgsEl = el('chatMsgs'); msgsEl.scrollTop = msgsEl.scrollHeight;
   detail.querySelectorAll('.speakBtn').forEach(b=>{
-    b.addEventListener('click', ()=>speakText(aiChatHistory[parseInt(b.dataset.i,10)].content));
+    b.addEventListener('click', ()=>{
+      const i = parseInt(b.dataset.i,10);
+      if(currentSpeakMsgIndex===i){ window.speechSynthesis.cancel(); currentSpeakMsgIndex=null; renderChatUI(false); }
+      else speakMessage(i);
+    });
   });
   el('btnChatSend').addEventListener('click', sendChatFromInput);
   el('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatFromInput(); } });
   const micBtn = el('btnMic');
   if(micBtn) micBtn.addEventListener('click', toggleMic);
-  el('btnBackSum2').addEventListener('click', ()=>showSummary('structured'));
-  el('btnCloseChat').addEventListener('click', ()=>{ overlay.classList.remove('show'); if(recognizer) recognizer.abort(); });
+  el('btnBackSum2').addEventListener('click', ()=>{ window.speechSynthesis.cancel(); currentSpeakMsgIndex=null; showSummary('structured'); });
+  el('btnCloseChat').addEventListener('click', ()=>{ window.speechSynthesis.cancel(); currentSpeakMsgIndex=null; overlay.classList.remove('show'); if(recognizer) recognizer.abort(); });
+}
+
+function highlightWordAt(msgIndex, charIndex){
+  const container = detail.querySelector(`.msgbubble[data-msg="${msgIndex}"]`);
+  if(!container) return;
+  let best=null;
+  container.querySelectorAll('.word').forEach(w=>{
+    w.classList.remove('reading');
+    const s = parseInt(w.dataset.start,10);
+    if(s<=charIndex && (best===null || s>parseInt(best.dataset.start,10))) best=w;
+  });
+  if(best){
+    best.classList.add('reading');
+    best.scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+}
+
+function speakMessage(i){
+  const m = aiChatHistory[i];
+  if(!m || !('speechSynthesis' in window)) return;
+  const clean = speechSanitize(m.content);
+  if(!clean) return;
+  window.speechSynthesis.cancel();
+  currentSpeakMsgIndex = i;
+  renderChatUI(false);
+  setTimeout(()=>{
+    try{
+      const u = new SpeechSynthesisUtterance(clean);
+      u.lang = 'uk-UA';
+      const voices = window.speechSynthesis.getVoices();
+      const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
+      if(ukVoice) u.voice = ukVoice;
+      u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, e.charIndex); };
+      u.onend = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
+      u.onerror = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
+      window.speechSynthesis.speak(u);
+    }catch(e){ currentSpeakMsgIndex=null; }
+  }, 150);
 }
 
 function toggleMic(){
@@ -922,7 +986,7 @@ async function sendChatFromInput(){
     const reply = await callClaudeReading(aiChatHistory, key, model);
     aiChatHistory.push({role:'assistant', content:cleanMarkdown(reply)});
     renderChatUI(false);
-    speakText(cleanMarkdown(reply));
+    speakMessage(aiChatHistory.length-1);
   }catch(e){
     aiChatHistory.push({role:'assistant', content:'⚠️ '+(e.message||'Помилка запиту.')});
     renderChatUI(false);
@@ -946,7 +1010,7 @@ async function runAIAnalysis(){
     const text = await callClaudeReading(aiChatHistory, key, model);
     aiChatHistory.push({role:'assistant', content:cleanMarkdown(text)});
     renderChatUI(false);
-    speakText(cleanMarkdown(text));
+    speakMessage(aiChatHistory.length-1);
   }catch(e){
     detail.innerHTML = `
       <div class="dpos">Не вдалося отримати аналіз</div>
