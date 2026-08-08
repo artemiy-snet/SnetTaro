@@ -774,7 +774,7 @@ async function callClaudeReading(promptOrMessages, apiKey, model){
     },
     body: JSON.stringify({
       model: model || 'claude-haiku-4-5-20251001',
-      max_tokens: 1800,
+      max_tokens: 4096,
       messages
     })
   });
@@ -782,7 +782,11 @@ async function callClaudeReading(promptOrMessages, apiKey, model){
   if(!res.ok){
     throw new Error((data && data.error && data.error.message) || ('Помилка запиту (HTTP '+res.status+')'));
   }
-  return (data.content||[]).map(b=>b.text||'').join('\n');
+  let text = (data.content||[]).map(b=>b.text||'').join('\n');
+  if(data.stop_reason==='max_tokens'){
+    text += '\n\n[Відповідь обірвалась через ліміт довжини — напиши "продовж", щоб дочути решту.]';
+  }
+  return text;
 }
 
 function buildAIPrompt(mn){
@@ -822,11 +826,22 @@ function cleanMarkdown(t){
     .replace(/^\d+\.\s+/gm, '')
     .trim();
 }
+function speechSanitize(t){
+  return String(t)
+    .replace(/[—–]/g, ', ')
+    .replace(/[→←↔]/g, ' ')
+    .replace(/[•▪●]/g, '')
+    .replace(/[«»„“”"]/g, '')
+    .replace(/[()]/g, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 function speakText(text){
   try{
     if(!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(speechSanitize(text));
     u.lang = 'uk-UA';
     const voices = window.speechSynthesis.getVoices();
     const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
