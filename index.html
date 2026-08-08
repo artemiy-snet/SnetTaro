@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>SnetTaro</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icon-192.png"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<meta name="theme-color" content="#120f1c"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="SnetTaro"/>
+<style>
+  :root{
+    --bg:#120f1c; --panel:#20192f; --panel2:#271f3c;
+    --gold:#c9a24b; --gold-dim:#8a7238;
+    --teal:#57c7bd;
+    --parchment:#f4efe3;
+    --ink:#241f30; --ink-soft:#5b5470;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', Palatino, serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--parchment);font-family:var(--sans);overflow-x:hidden;}
+  body{background:
+      radial-gradient(ellipse at 50% -10%, #2a2145 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 110%, #241a3a 0%, transparent 50%),
+      var(--bg); min-height:100vh;}
+  #app{max-width:540px;margin:0 auto;padding:18px 16px 44px;position:relative;min-height:100vh;}
+
+  header{text-align:center;position:relative;margin-bottom:4px;}
+  header .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);}
+  header h1{font-family:var(--serif);font-weight:600;font-size:26px;margin:4px 0 2px;color:var(--parchment);}
+  header p.sub{font-size:12px;color:#9d95b5;margin:0;line-height:1.5;}
+  #histBtn{
+    position:absolute;right:0;top:2px;background:none;border:1px solid #362c52;color:#b8afd0;
+    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
+  }
+  #deckCustomBtn{
+    position:absolute;left:0;top:2px;background:none;border:1px solid #362c52;color:#b8afd0;
+    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
+  }
+  .divider{width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:14px auto 16px;}
+
+  /* ---- setup ---- */
+  #setup{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  #qInput{
+    width:100%;max-width:420px;background:var(--panel);border:1px solid #362c52;border-radius:10px;
+    color:var(--parchment);font-family:var(--sans);font-size:13.5px;padding:11px 13px;resize:none;
+  }
+  #qInput::placeholder{color:#726a8c;}
+  .spread-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .choice-btn{
+    font-size:12.5px;color:var(--parchment);background:var(--panel);border:1px solid #362c52;border-radius:20px;
+    padding:8px 14px;cursor:pointer;transition:.2s;
+  }
+  .choice-btn.active{background:var(--gold);color:#231b0e;border-color:var(--gold);font-weight:600;}
+  .primary-btn{
+    font-family:var(--serif);font-size:16px;letter-spacing:.03em;background:linear-gradient(180deg,#d8b563,var(--gold));
+    color:#231b0e;border:none;border-radius:8px;padding:13px 30px;cursor:pointer;
+    box-shadow:0 4px 18px rgba(201,162,75,.25);
+  }
+  .primary-btn:active{transform:scale(.97);}
+  .primary-btn:disabled{opacity:.4;}
+  .ghost-btn{font-size:12px;color:#b8afd0;background:none;border:1px solid #362c52;border-radius:20px;padding:9px 16px;cursor:pointer;}
+
+  /* ---- big deck stack ---- */
+  #stage{position:relative;height:300px;display:flex;align-items:flex-end;justify-content:center;margin:6px 0 4px;}
+  #deckStack{position:relative;width:172px;height:264px;}
+  .card-back{
+    position:absolute;left:0;top:0;width:172px;height:264px;border-radius:12px;
+    background:radial-gradient(circle at 50% 42%, #3a2f5c 0%, #221a38 62%, #191228 100%);
+    border:1.5px solid var(--gold-dim);
+    box-shadow:0 12px 30px rgba(0,0,0,.45);
+  }
+  .card-back::before{content:"";position:absolute;inset:10px;border:1px solid rgba(201,162,75,.55);border-radius:8px;}
+  .card-back::after{
+    content:"";position:absolute;left:50%;top:50%;width:60px;height:60px;transform:translate(-50%,-50%);
+    border:1px solid var(--gold);border-radius:50%;
+    box-shadow:0 0 0 9px rgba(201,162,75,.08), 0 0 22px rgba(201,162,75,.35) inset;
+  }
+  #deckCount{
+    position:absolute;bottom:-22px;left:0;right:0;text-align:center;font-size:10.5px;color:#8d84a8;letter-spacing:.08em;
+  }
+  #deckStack.shuffling .card-back{animation:shuffleMove .55s ease-in-out infinite alternate;}
+  @keyframes shuffleMove{0%{transform:translate(-10px,0) rotate(-6deg);}100%{transform:translate(10px,0) rotate(6deg);}}
+
+  /* ---- question banner during spread ---- */
+  #qBanner{display:none;text-align:center;font-family:var(--serif);font-size:14px;color:var(--gold);
+    padding:0 8px;margin-bottom:10px;line-height:1.4;}
+  #qBanner.show{display:block;}
+
+  /* ---- board ---- */
+  #board{display:none;margin:0 0 10px;}
+  #board.show{display:block;}
+  .board-slot{
+    background:var(--panel);border:1px dashed #3a3153;border-radius:8px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:9.5px;color:#5c5478;text-align:center;padding:4px;cursor:default;position:relative;
+  }
+  .board-slot .slotnum{font-family:var(--serif);color:var(--gold-dim);font-size:12px;margin-bottom:2px;}
+  .mini-card{
+    width:100%;height:100%;border-radius:7px;cursor:pointer;
+    background:linear-gradient(160deg,#faf6ec,var(--parchment));border:1px solid var(--gold);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;color:var(--ink);
+    text-align:center;box-shadow:0 5px 14px rgba(0,0,0,.35);position:relative;animation:flipIn .45s ease;
+  }
+  .mc-img{width:100%;flex:1;min-height:0;border-radius:5px;overflow:hidden;margin-bottom:3px;background:#efe6cf;}
+  .mini-card .nm{font-family:var(--serif);font-size:8.5px;font-weight:700;line-height:1.15;margin-top:2px;}
+  .mini-card .rv{font-size:6.5px;color:#9c1f1f;text-transform:uppercase;letter-spacing:.04em;}
+  .mini-card .badge{
+    position:absolute;top:-5px;right:-5px;background:var(--teal);color:#0d2624;font-size:8.5px;font-weight:700;
+    border-radius:9px;padding:1px 5px;box-shadow:0 2px 5px rgba(0,0,0,.3);
+  }
+  @keyframes flipIn{0%{transform:rotateY(90deg) scale(.8);opacity:0;}100%{transform:rotateY(0) scale(1);opacity:1;}}
+
+  #row3{display:flex;gap:10px;max-width:420px;margin:0 auto;}
+  #row3 .board-slot{flex:1;aspect-ratio:0.68;}
+
+  #single{display:flex;justify-content:center;}
+  #single .board-slot{width:110px;aspect-ratio:0.68;}
+
+  #cross-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .cross{
+    display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:repeat(3,1fr);
+    grid-template-areas:". five ." "four one six" ". three .";
+    gap:6px;width:100%;max-width:290px;
+  }
+  .cross .board-slot{aspect-ratio:0.68;}
+  .slot-five{grid-area:five;} .slot-four{grid-area:four;} .slot-six{grid-area:six;} .slot-three{grid-area:three;}
+  .slot-one{grid-area:one;position:relative;}
+  .slot-two{position:absolute;inset:8%;transform:rotate(90deg);z-index:3;}
+  .staff{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:290px;}
+  .staff .board-slot{aspect-ratio:0.68;}
+
+  /* ---- fan ---- */
+  #fanWrap{display:none;flex-direction:column;align-items:center;}
+  #fanWrap.show{display:flex;}
+  #fanLabel{font-family:var(--serif);font-size:14px;color:var(--gold);margin-bottom:2px;text-align:center;min-height:36px;padding:0 6px;}
+  #fanHint{font-size:11px;color:#8d84a8;margin-bottom:6px;text-align:center;}
+  #fan{position:relative;width:100%;height:270px;touch-action:none;user-select:none;display:flex;justify-content:center;}
+  .tcard{
+    position:absolute;left:50%;bottom:0;width:64px;height:100px;margin-left:-32px;
+    background:radial-gradient(circle at 50% 42%, #3a2f5c 0%, #221a38 62%, #191228 100%);
+    border:1px solid var(--gold-dim);border-radius:7px;transform-origin:50% 100%;
+    transform:translateX(-50%) rotate(var(--ang,0deg)) translateY(var(--lift,0px));
+    box-shadow:0 4px 10px rgba(0,0,0,.4);
+    transition:box-shadow .15s, filter .15s, transform .12s ease-out;cursor:pointer;
+  }
+  .tcard::after{content:"";position:absolute;left:50%;top:36%;width:14px;height:14px;transform:translate(-50%,-50%);
+    border:1px solid rgba(201,162,75,.7);border-radius:50%;}
+  .tcard.hovered{box-shadow:0 0 0 2px var(--teal), 0 14px 26px rgba(87,199,189,.5);filter:brightness(1.18);}
+
+  #resetRow, #summaryRow{text-align:center;margin-top:10px;}
+
+  /* ---- overlay / detail ---- */
+  #overlay{position:fixed;inset:0;background:rgba(10,8,18,.72);backdrop-filter:blur(2px);display:none;align-items:flex-end;justify-content:center;z-index:20;}
+  #overlay.show{display:flex;}
+  #detail{width:100%;max-width:540px;background:var(--parchment);color:var(--ink);border-radius:18px 18px 0 0;
+    padding:20px 20px 24px;max-height:86vh;overflow-y:auto;animation:slideUp .28s ease;}
+  @keyframes slideUp{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  #detail .dpos{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim);text-align:center;}
+  #detail .dhead{display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
+  .cimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#faf6ec,#efe6cf);overflow:hidden;}
+  .cimg img{width:100%;height:100%;object-fit:cover;display:block;}
+  .cardicon{width:80%;height:80%;color:var(--icol,#4a3f6b);}
+  .cardicon .iframe{fill:none;stroke:var(--icol,#4a3f6b);stroke-width:1.4;opacity:.28;}
+  .cardicon path,.cardicon line,.cardicon circle:not(.iframe){fill:none;stroke:currentColor;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;}
+  .dbigimg{width:100%;display:flex;justify-content:center;margin:4px 0 14px;}
+  .dbigimg .cimg{width:190px;height:270px;border-radius:10px;border:2px solid var(--gold);
+    box-shadow:0 10px 26px rgba(0,0,0,.28);}
+  .dbigimg.flip .cimg{transform:rotate(180deg);}
+
+  .deckgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px;}
+  .dgcell{aspect-ratio:0.68;border-radius:7px;overflow:hidden;position:relative;cursor:pointer;
+    border:1px solid var(--gold-dim);background:#efe6cf;}
+  .dgcell .cimg{width:100%;height:100%;}
+  .dgname{position:absolute;bottom:0;left:0;right:0;background:rgba(20,15,30,.62);color:#fff;
+    font-size:7.5px;padding:2px 2px;text-align:center;line-height:1.15;}
+  .dgreset{position:absolute;top:2px;right:2px;background:rgba(20,15,30,.72);color:#fff;border-radius:50%;
+    width:17px;height:17px;font-size:11px;display:flex;align-items:center;justify-content:center;z-index:2;}
+  #detail .dtitle .dnum{font-family:var(--serif);font-size:11px;color:var(--gold-dim);}
+  #detail .dtitle h2{font-family:var(--serif);font-size:20px;margin:1px 0 2px;}
+  #detail .dtitle .delem{font-size:11px;color:var(--ink-soft);}
+  #detail .dorient{display:inline-block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;border-radius:10px;margin-bottom:10px;}
+  #detail .dorient.up{background:#e4ecd8;color:#3d5a2a;} #detail .dorient.rv{background:#f2dede;color:#8f2a2a;}
+  #detail h4{font-family:var(--serif);font-size:12px;margin:13px 0 4px;text-transform:uppercase;letter-spacing:.06em;}
+  #detail p{font-size:13.5px;line-height:1.5;margin:0 0 4px;}
+  #detail .dsecondary{font-size:12px;color:var(--ink-soft);line-height:1.5;}
+  .kw{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .kw span{background:#e9e2cf;color:var(--ink);font-size:10.5px;padding:4px 9px;border-radius:11px;}
+  #noteBox{width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:9px 10px;font-family:var(--sans);
+    font-size:12.5px;color:var(--ink);background:#fbf9f2;resize:vertical;min-height:52px;margin-top:4px;}
+  .clarList{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .clarChip{background:#efe6cf;border:1px solid var(--gold-dim);border-radius:8px;padding:5px 9px;font-size:11px;cursor:pointer;}
+  .dactions{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap;}
+  .dactions button{flex:1;min-width:120px;}
+  .dclose{font-family:var(--serif);font-size:13.5px;background:var(--ink);color:var(--parchment);border:none;border-radius:8px;padding:12px;cursor:pointer;}
+  .dclar{font-family:var(--sans);font-size:12.5px;background:none;border:1px solid var(--gold-dim);color:var(--ink);border-radius:8px;padding:12px;cursor:pointer;}
+
+  #histPanel{display:none;background:var(--panel);border:1px solid #362c52;border-radius:12px;padding:14px;margin-bottom:14px;}
+  #histPanel.show{display:block;}
+  #histPanel h3{font-family:var(--serif);font-size:14px;margin:0 0 10px;color:var(--gold);}
+  .histItem{background:var(--panel2);border-radius:8px;padding:9px 11px;margin-bottom:8px;cursor:pointer;}
+  .histItem .hq{font-size:12.5px;color:var(--parchment);font-family:var(--serif);}
+  .histItem .hm{font-size:10px;color:#9d95b5;margin-top:2px;}
+  .histEmpty{font-size:12px;color:#7a7195;text-align:center;padding:8px 0;}
+
+  footer.note{text-align:center;font-size:10.5px;color:#635b7c;margin-top:24px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="histBtn">Історія</button>
+    <button id="deckCustomBtn">Колода</button>
+    <div class="eyebrow">Навчальний тренажер</div>
+    <h1>SnetTaro</h1>
+    <p class="sub">Сформулюй питання, обери розклад, перетасуй колоду —<br>і потягни пальцем по віялу, щоб витягнути карту.</p>
+  </header>
+  <div class="divider"></div>
+
+  <div id="histPanel"></div>
+
+  <div id="setup">
+    <textarea id="qInput" rows="2" placeholder="Твоє питання (необов'язково) — наприклад: на що варто звернути увагу зараз?"></textarea>
+    <div class="spread-row" id="spreadRow">
+      <button class="choice-btn active" data-spread="1">1 карта</button>
+      <button class="choice-btn" data-spread="3">3 карти — Минуле · Теперішнє · Майбутнє</button>
+      <button class="choice-btn" data-spread="10">Кельтський хрест (10 карт)</button>
+    </div>
+    <button class="primary-btn" id="shuffleBtn">Перетасувати колоду</button>
+  </div>
+
+  <div id="stage" style="display:none;">
+    <div id="deckStack"></div>
+    <div id="deckCount">78 карт</div>
+  </div>
+
+  <div id="qBanner"></div>
+  <div id="board"></div>
+
+  <div id="fanWrap">
+    <div id="fanLabel"></div>
+    <div id="fanHint">Проведи пальцем по картах і відпусти на обраній</div>
+    <div id="fan"></div>
+  </div>
+
+  <div id="summaryRow"></div>
+  <div id="resetRow"></div>
+
+  <footer class="note">Тлумачення тут — інструмент для структурованої саморефлексії й роботи з архетипами,<br>а не спосіб передбачити майбутнє.</footer>
+</div>
+
+<div id="overlay"><div id="detail"></div></div>
+<input type="file" id="customImgInput" accept="image/*" style="display:none;">
+
+<script>
+/* ================= DATA ================= */
+const MAJOR = [
+ {n:'0', name:'Блазень', elem:'Стихія: Повітря / Дух', gl:'🃏',
+  img:'Юнак із вузликом на плечі йде до краю прірви, не дивлячись під ноги; поруч дріботить білий песик.',
+  up:'Початок нового шляху, довіра до невідомого, готовність ризикнути без гарантій результату.',
+  rev:'Легковажність, страх зробити перший крок або стрибок «наосліп» без жодної підготовки.',
+  kw:['новий початок','довіра','ризик','спонтанність','свобода']},
+ {n:'I', name:'Маг', elem:'Стихія: усі чотири елементи', gl:'✨',
+  img:'Чоловік стоїть за столом із жезлом, кубком, мечем і пентаклем — усіма інструментами відразу.',
+  up:'Здатність втілювати задум у дію: ресурси вже є, лишається зібрати волю і почати.',
+  rev:'Маніпуляція, розпорошена енергія або талант, який не використовується за призначенням.',
+  kw:['воля','дія','ресурси','майстерність','намір']},
+ {n:'II', name:'Верховна Жриця', elem:'Стихія: Вода / Місяць', gl:'☾',
+  img:'Жінка сидить між двома колонами, тримаючи сувій напівприхованих знань, за нею — завіса.',
+  up:'Інтуїція, внутрішнє знання, яке ще не оформлене в слова; пауза перед дією заради тиші.',
+  rev:'Ігнорування внутрішнього голосу, секрети, які починають шкодити через замовчування.',
+  kw:['інтуїція','таємниця','підсвідоме','тиша','внутрішній голос']},
+ {n:'III', name:'Імператриця', elem:'Стихія: Земля / Венера', gl:'♀',
+  img:'Жінка в короні з зірок сидить серед пшеничного поля й буйної природи.',
+  up:'Творчість, турбота, достаток, що народжується з дозволу собі рости й насолоджуватись.',
+  rev:'Виснаження від гіперопіки над іншими, творчий застій, занедбання власних потреб.',
+  kw:['творчість','достаток','турбота','природа','плодючість']},
+ {n:'IV', name:'Імператор', elem:'Стихія: Вогонь / Овен', gl:'♂',
+  img:'Чоловік на кам’яному троні з баранячими головами, у руці — держава влади.',
+  up:'Структура, дисципліна, здатність будувати стабільність через чіткі межі й відповідальність.',
+  rev:'Надмірний контроль, ригідність або, навпаки, втрата авторитету й хаос без керма.',
+  kw:['структура','авторитет','контроль','стабільність','межі']},
+ {n:'V', name:'Ієрофант', elem:'Стихія: Земля / Телець', gl:'🕊',
+  img:'Фігура в мантії благословляє двох учнів між колонами храму.',
+  up:'Традиція, навчання у визнаної системи, потреба в наставнику чи спільних правилах.',
+  rev:'Бунт проти догм або, навпаки, сліпе слідування правилам без власного осмислення.',
+  kw:['традиція','навчання','система','наставництво','догма']},
+ {n:'VI', name:'Закохані', elem:'Стихія: Повітря / Близнюки', gl:'♊',
+  img:'Чоловік і жінка стоять під ангелом, що благословляє їхній союз.',
+  up:'Вибір, що узгоджений із власними цінностями; глибокий зв’язок, заснований на щирості.',
+  rev:'Внутрішній конфлікт цінностей, невірний вибір або дисбаланс у стосунках.',
+  kw:['вибір','цінності','гармонія','зв’язок','щирість']},
+ {n:'VII', name:'Колісниця', elem:'Стихія: Вода / Рак', gl:'🏇',
+  img:'Воїн керує колісницею, запряженою двома сфінксами, що дивляться в різні боки.',
+  up:'Перемога через зібрану волю, здатність тримати курс попри внутрішні протиріччя.',
+  rev:'Втрата напрямку, боротьба протилежних імпульсів, агресія замість контролю.',
+  kw:['воля','рух вперед','контроль','перемога','рішучість']},
+ {n:'VIII', name:'Сила', elem:'Стихія: Вогонь / Лев', gl:'🦁',
+  img:'Жінка спокійно закриває пащу лева руками, не силою, а м’якістю.',
+  up:'Внутрішня стійкість, що діє через терпіння й прийняття, а не через тиск.',
+  rev:'Сумнів у власних силах, придушені емоції або спроба контролювати грубою силою.',
+  kw:['стійкість','м’якість','терпіння','самовладання','мужність']},
+ {n:'IX', name:'Пустельник', elem:'Стихія: Земля / Діва', gl:'🏮',
+  img:'Старий із ліхтарем стоїть самотньо на вершині гори, освітлюючи собі шлях.',
+  up:'Свідома самотність заради пошуку відповідей усередині себе, а не ззовні.',
+  rev:'Ізоляція від інших, що вже шкодить, або відмова шукати підказку в самоаналізі.',
+  kw:['самоаналіз','усамітнення','пошук істини','мудрість','пауза']},
+ {n:'X', name:'Колесо Фортуни', elem:'Стихія: Вогонь / Юпітер', gl:'☸',
+  img:'Величезне колесо обертається серед хмар із символічними фігурами по колу.',
+  up:'Циклічність подій: полоса змін, що приходить незалежно від наших планів.',
+  rev:'Відчуття, що доля «проти», опір неминучим змінам, повторення тих самих циклів.',
+  kw:['зміни','цикли','доля','поворот','несподіванка']},
+ {n:'XI', name:'Справедливість', elem:'Стихія: Повітря / Терези', gl:'⚖',
+  img:'Постать із мечем і терезами сидить рівно, без емоцій на обличчі.',
+  up:'Чесна оцінка ситуації, наслідки, що відповідають діям; час брати відповідальність.',
+  rev:'Упередженість, уникнення відповідальності або відчуття несправедливості, яке треба перевірити.',
+  kw:['баланс','відповідальність','чесність','наслідки','об’єктивність']},
+ {n:'XII', name:'Повішений', elem:'Стихія: Вода', gl:'🙃',
+  img:'Чоловік висить догори ногами на дереві, обличчя спокійне, майже світиться.',
+  up:'Свідома пауза, погляд на ситуацію під іншим кутом замість негайної дії.',
+  rev:'Застрягання в жертовності, відкладання рішення, що вже стало виправданням бездіяльності.',
+  kw:['пауза','інший погляд','жертовність','відпускання','терпіння']},
+ {n:'XIII', name:'Смерть', elem:'Стихія: Вода / Скорпіон', gl:'🦋',
+  img:'Скелет-вершник їде полем, де все живе схиляється перед ним, а вдалині сходить сонце.',
+  up:'Завершення етапу, що звільняє місце для нового; символічна, а не буквальна смерть.',
+  rev:'Опір неминучій зміні, застрягання у формі життя, яка вже вичерпала себе.',
+  kw:['завершення','трансформація','відпускання','новий етап','неминучість']},
+ {n:'XIV', name:'Помірність', elem:'Стихія: Вогонь / Стрілець', gl:'🕊',
+  img:'Ангел переливає воду з однієї чаші в іншу, стоячи однією ногою у воді, іншою на землі.',
+  up:'Пошук балансу, поступова інтеграція протилежностей замість крайнощів.',
+  rev:'Крайнощі, нетерпіння, спроба поєднати несумісне занадто швидко.',
+  kw:['баланс','поміркованість','інтеграція','терпіння','гармонія']},
+ {n:'XV', name:'Диявол', elem:'Стихія: Земля / Козеріг', gl:'⛓',
+  img:'Пара прикута ланцюгами біля рогатої фігури, але ланцюги вільно спадають з шиї.',
+  up:'Залежність, обмеження, які насправді можна зняти, але зручно вважати «неминучими».',
+  rev:'Усвідомлення залежності й перший крок до звільнення від деструктивного патерну.',
+  kw:['залежність','обмеження','тінь','спокуса','ілюзія пастки']},
+ {n:'XVI', name:'Вежа', elem:'Стихія: Вогонь / Марс', gl:'⚡',
+  img:'Блискавка вражає вежу, з неї випадають дві фігури серед вогню.',
+  up:'Раптове руйнування хибної конструкції — болісне, але таке, що відкриває правду.',
+  rev:'Затяжна криза, якої уникали, або страх перед неминучими змінами.',
+  kw:['раптова зміна','руйнування ілюзій','криза','правда','звільнення']},
+ {n:'XVII', name:'Зірка', elem:'Стихія: Повітря / Водолій', gl:'⭐',
+  img:'Оголена жінка при місячному світлі виливає воду з двох глеків у струмок і на землю.',
+  up:'Надія й відновлення після кризи, довіра до процесу без потреби все контролювати.',
+  rev:'Втрата віри в майбутнє, вигорання, відчуття, що надії було замало.',
+  kw:['надія','відновлення','натхнення','довіра','ясність']},
+ {n:'XVIII', name:'Місяць', elem:'Стихія: Вода / Риби', gl:'🌙',
+  img:'Місяць над двома вежами освітлює шлях, яким рак виповзає зі ставка, а вовк і пес виють.',
+  up:'Робота з підсвідомим, тривога чи інтуїція, яку важко відрізнити від страху.',
+  rev:'Прояснення після періоду плутанини, викриття самообману або прихованих страхів.',
+  kw:['підсвідоме','тривога','ілюзії','інтуїція','невизначеність']},
+ {n:'XIX', name:'Сонце', elem:'Стихія: Вогонь', gl:'☀',
+  img:'Дитина на білому коні радісно їде під яскравим сонцем серед соняшників.',
+  up:'Ясність, щирість, радість без прихованих мотивів; етап, коли все видно чітко.',
+  rev:'Тимчасово затьмарена радість, надмірний оптимізм, що ігнорує реальні проблеми.',
+  kw:['радість','ясність','вітальність','щирість','успіх']},
+ {n:'XX', name:'Суд', elem:'Стихія: Вогонь / Плутон', gl:'📯',
+  img:'Ангел сурмить у трубу, а люди піднімаються з могил, готові до нового життя.',
+  up:'Момент чесного підсумку минулого досвіду, що дає дозвіл рухатись далі оновленим.',
+  rev:'Самокритика без прощення, страх зробити висновки й відповісти собі чесно.',
+  kw:['підсумок','пробудження','прощення','переоцінка','відродження']},
+ {n:'XXI', name:'Світ', elem:'Стихія: Земля / Сатурн', gl:'🌍',
+  img:'Оголена фігура танцює у вінку серед хмар, оточена символами чотирьох стихій.',
+  up:'Завершення великого циклу, цілісність, відчуття «все на своєму місці».',
+  rev:'Незавершеність, відчуття, що чогось бракує до фінальної крапки в циклі.',
+  kw:['завершення циклу','цілісність','досягнення','інтеграція','гармонія']},
+];
+
+const SUITS = {
+ wands:{name:'Жезли',elem:'Вогонь',domain:'дій, амбіцій, енергії та творчого пориву',gl:'🔥',icon:'flame',color:'#b1562f'},
+ cups:{name:'Кубки',elem:'Вода',domain:'почуттів, стосунків і внутрішнього світу',gl:'💧',icon:'chalice',color:'#3f7f9e'},
+ swords:{name:'Мечі',elem:'Повітря',domain:'думок, конфліктів та ясності розуму',gl:'⚔',icon:'swordcross',color:'#6b6f7a'},
+ pentacles:{name:'Пентаклі',elem:'Земля',domain:'матеріального світу, роботи й тіла',gl:'🪙',icon:'pentacle',color:'#7c8c3e'},
+};
+const MAJOR_ICONS = ['cliff','infinity','moon','union','ram','key','union','wheel','infinity','lantern','wheel','scale','figure','phoenix','chalice','ram','tower','star','moon','sun','trumpet','wreath'];
+const MAJOR_COLOR = '#4a3f6b';
+
+function raysSVG(n, r1, r2, cx, cy){
+  let out='';
+  for(let i=0;i<n;i++){
+    const a = (Math.PI*2*i)/n;
+    const x1=cx+r1*Math.cos(a), y1=cy+r1*Math.sin(a), x2=cx+r2*Math.cos(a), y2=cy+r2*Math.sin(a);
+    out += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+  }
+  return out;
+}
+const ICONS = {
+ flame:'<path d="M50 16 C38 34 30 46 30 60 C30 77 39 88 50 88 C61 88 70 77 70 60 C70 46 62 34 50 16 Z"/><path d="M50 42 C44 52 41 58 41 65 C41 73 45 79 50 79 C55 79 59 73 59 65 C59 58 56 52 50 42 Z" stroke-width="3"/>',
+ chalice:'<path d="M32 22 L68 22 L59 52 C59 63 41 63 41 52 Z"/><line x1="50" y1="63" x2="50" y2="78"/><line x1="35" y1="86" x2="65" y2="86"/>',
+ swordcross:'<line x1="50" y1="13" x2="50" y2="80"/><line x1="29" y1="34" x2="71" y2="34"/><path d="M41 80 L59 80 L50 90 Z"/>',
+ pentacle:'<circle cx="50" cy="50" r="33"/><path d="M50 21 L59 45 L85 45 L64 60 L72 84 L50 69 L28 84 L36 60 L15 45 L41 45 Z"/>',
+ cliff:'<circle cx="73" cy="27" r="10"/><path d="M13 83 L44 33 L58 55 L70 39 L91 83 Z"/>',
+ infinity:'<path d="M30 50 C30 37 43 37 50 50 C57 63 70 63 70 50 C70 37 57 37 50 50 C43 63 30 63 30 50 Z"/>',
+ moon:'<path d="M63 18 A34 34 0 1 0 63 82 A26 26 0 1 1 63 18 Z"/>',
+ union:'<circle cx="39" cy="55" r="22"/><circle cx="61" cy="55" r="22"/><circle cx="50" cy="17" r="7"/>',
+ ram:'<path d="M50 32 C33 21 21 30 19 47"/><path d="M50 32 C67 21 79 30 81 47"/><circle cx="50" cy="55" r="15"/>',
+ key:'<circle cx="34" cy="30" r="12"/><line x1="43" y1="39" x2="72" y2="68"/><line x1="60" y1="58" x2="51" y2="67"/><line x1="67" y1="65" x2="58" y2="74"/>',
+ wheel:'<circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="7"/>'+raysSVG(8,10,32,50,50),
+ lantern:'<path d="M37 29 L63 29 L69 50 L63 71 L37 71 L31 50 Z"/><circle cx="50" cy="50" r="6"/><line x1="50" y1="12" x2="50" y2="29"/>',
+ scale:'<line x1="50" y1="13" x2="50" y2="70"/><line x1="25" y1="30" x2="75" y2="30"/><path d="M17 30 L33 30 L25 50 Z"/><path d="M67 30 L83 30 L75 50 Z"/><line x1="33" y1="83" x2="67" y2="83"/><line x1="50" y1="70" x2="50" y2="83"/>',
+ figure:'<circle cx="50" cy="72" r="10"/><line x1="50" y1="62" x2="50" y2="28"/><line x1="50" y1="40" x2="33" y2="25"/><line x1="50" y1="40" x2="67" y2="25"/><line x1="25" y1="16" x2="75" y2="16"/>',
+ phoenix:'<path d="M50 72 C35 61 18 56 12 33 C29 39 42 48 50 61 C58 48 71 39 88 33 C82 56 65 61 50 72 Z"/>',
+ tower:'<rect x="37" y="36" width="26" height="48"/><line x1="30" y1="36" x2="37" y2="36"/><line x1="63" y1="36" x2="70" y2="36"/><path d="M58 10 L43 34 L54 34 L38 58"/>',
+ star:'<path d="M50 14 L59 40 L86 40 L64 56 L72 82 L50 66 L28 82 L36 56 L14 40 L41 40 Z"/>',
+ sun:'<circle cx="50" cy="50" r="18"/>'+raysSVG(10,24,34,50,50),
+ trumpet:'<path d="M19 50 L60 32 L60 68 Z"/><line x1="60" y1="50" x2="87" y2="50"/>',
+ wreath:'<circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="24"/>',
+};
+function svgIcon(key){
+  return `<svg viewBox="0 0 100 100" class="cardicon"><circle class="iframe" cx="50" cy="50" r="46"/>${ICONS[key]||''}</svg>`;
+}
+const customImages = {}; // deckIdx -> dataURL, session-only
+function cardVisualHTML(c, deckIdx){
+  if(deckIdx!=null && customImages[deckIdx]){
+    return `<div class="cimg"><img src="${customImages[deckIdx]}" alt="${c.name}"></div>`;
+  }
+  return `<div class="cimg" style="--icol:${c.iconColor}">${svgIcon(c.iconKey)}</div>`;
+}
+function loadImageAsDataURL(file, maxDim, cb){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let w=img.width, h=img.height;
+      if(w>h){ if(w>maxDim){h=Math.round(h*maxDim/w); w=maxDim;} }
+      else { if(h>maxDim){w=Math.round(w*maxDim/h); h=maxDim;} }
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL('image/jpeg',0.85));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+const RANKS = [
+ {label:'Туз',n:'A',up:d=>`Чистий, ще не оформлений потенціал у сфері ${d}. Нова можливість щойно з’являється.`,rev:d=>`Втрачена або заблокована можливість у сфері ${d} — потенціал, який поки не вдається використати.`},
+ {label:'Двійка',n:'2',up:d=>`Вибір або баланс двох сил у сфері ${d}. Потрібно зважити варіанти.`,rev:d=>`Нерішучість, застрягання між двома варіантами у сфері ${d}.`},
+ {label:'Трійка',n:'3',up:d=>`Перші видимі результати й співпраця у сфері ${d}.`,rev:d=>`Затримка результатів або розлад у співпраці, повʼязаній зі сферою ${d}.`},
+ {label:'Четвірка',n:'4',up:d=>`Стабільність, пауза для закріплення здобутого у сфері ${d}.`,rev:d=>`Застій, надмірна обережність, що заважає руху у сфері ${d}.`},
+ {label:'Пʼятірка',n:'5',up:d=>`Конфлікт або виклик, що перевіряє на міцність у сфері ${d}.`,rev:d=>`Виснаження від затяжного конфлікту в сфері ${d}, час шукати вихід.`},
+ {label:'Шістка',n:'6',up:d=>`Гармонія, взаємна підтримка чи справедливий обмін у сфері ${d}.`,rev:d=>`Дисбаланс у взаємності — хтось дає або бере більше в сфері ${d}.`},
+ {label:'Сімка',n:'7',up:d=>`Оцінка зробленого, терпіння й стратегічна пауза у сфері ${d}.`,rev:d=>`Сумніви, що паралізують дію, або нетерпіння в сфері ${d}.`},
+ {label:'Вісімка',n:'8',up:d=>`Активний рух, майстерність, що набирає темп у сфері ${d}.`,rev:d=>`Розкидана енергія або перешкоди, що сповільнюють рух у сфері ${d}.`},
+ {label:'Девʼятка',n:'9',up:d=>`Близькість до завершення, витривалість на останньому ривку у сфері ${d}.`,rev:d=>`Тривога через близькість фіналу, страх не втримати здобуте в сфері ${d}.`},
+ {label:'Десятка',n:'10',up:d=>`Завершення циклу у сфері ${d} — з усім його тягарем або повнотою.`,rev:d=>`Перевантаження, що вже виснажує у сфері ${d}; час завершити цикл.`},
+ {label:'Паж',n:'P',up:d=>`Учнівська, допитлива енергія — початок пізнання сфери ${d}.`,rev:d=>`Незрілість, легковажність або новини, повʼязані зі сферою ${d}, яким варто перевірити.`},
+ {label:'Лицар',n:'K',up:d=>`Активна дія, рух до мети в дусі сфери ${d}, іноді надто стрімкий.`,rev:d=>`Імпульсивність або, навпаки, застрягання без дії в сфері ${d}.`},
+ {label:'Королева',n:'Q',up:d=>`Зріле, турботливе володіння енергією ${d} — впевненість без демонстрації сили.`,rev:d=>`Емоційна виснаженість або гіперопіка через енергію ${d}.`},
+ {label:'Король',n:'Kg',up:d=>`Зріла, авторитетна майстерність у сфері ${d}, влада через досвід.`,rev:d=>`Авторитарність або зловживання владою в сфері ${d}.`},
+];
+function buildMinors(){
+  const out=[];
+  for(const key of Object.keys(SUITS)){
+    const s=SUITS[key];
+    RANKS.forEach((r,i)=>{
+      out.push({
+        arcana:'minor', suitKey:key, n:r.n, name:`${r.label} ${s.name}`, elem:`Стихія: ${s.elem}`, gl:s.gl,
+        img:`Карта масті «${s.name}» (${s.elem}), повʼязана зі сферою ${s.domain}.`,
+        up:r.up(s.domain), rev:r.rev(s.domain),
+        kw:[s.name.toLowerCase(), s.elem.toLowerCase(), r.label.toLowerCase(), 'архетип', 'самоаналіз'],
+        iconKey:s.icon, iconColor:s.color
+      });
+    });
+  }
+  return out;
+}
+const DECK = [
+  ...MAJOR.map((c,i)=>({arcana:'major', n:c.n, name:c.name, elem:c.elem, gl:c.gl, img:c.img, up:c.up, rev:c.rev, kw:c.kw, iconKey:MAJOR_ICONS[i], iconColor:MAJOR_COLOR})),
+  ...buildMinors()
+];
+
+/* ================= SPREADS ================= */
+const SPREADS = {
+ '1':[{label:'Відповідь'}],
+ '3':[{label:'Минуле'},{label:'Теперішнє'},{label:'Майбутнє'}],
+ '10':[
+   {label:'Суть питання',area:'one'},
+   {label:'Виклик',area:'two'},
+   {label:'Коріння (причина)',area:'three'},
+   {label:'Минуле',area:'four'},
+   {label:'Можливий розвиток',area:'five'},
+   {label:'Найближче майбутнє',area:'six'},
+   {label:'Твоя позиція',staff:0},
+   {label:'Оточення',staff:1},
+   {label:'Надії та страхи',staff:2},
+   {label:'Підсумок',staff:3},
+ ]
+};
+
+/* ================= STATE ================= */
+let order=[], reversedMap={}, remaining=[];
+let question='';
+let spreadType='1';
+let positionsConfig = SPREADS['1'];
+let nodes=[]; let nextId=1;
+let pendingClarifyParentId=null;
+let history=[];
+
+const el=id=>document.getElementById(id);
+const setupEl=el('setup'), stage=el('stage'), deckStack=el('deckStack'), shuffleBtn=el('shuffleBtn');
+const qInput=el('qInput'), spreadRow=el('spreadRow'), qBanner=el('qBanner');
+const board=el('board'), fanWrap=el('fanWrap'), fan=el('fan'), fanLabel=el('fanLabel');
+const overlay=el('overlay'), detail=el('detail');
+const resetRow=el('resetRow'), summaryRow=el('summaryRow');
+const histBtn=el('histBtn'), histPanel=el('histPanel');
+const deckCustomBtn=el('deckCustomBtn'), customImgInput=el('customImgInput');
+let pendingUploadDeckIdx=null, pendingUploadRefresh=null;
+
+customImgInput.addEventListener('change', e=>{
+  const file=e.target.files[0]; customImgInput.value='';
+  if(!file || pendingUploadDeckIdx===null) return;
+  loadImageAsDataURL(file, 640, dataURL=>{
+    customImages[pendingUploadDeckIdx]=dataURL;
+    if(pendingUploadRefresh) pendingUploadRefresh();
+    if(board.classList.contains('show')) renderBoard();
+  });
+});
+deckCustomBtn.addEventListener('click', ()=>openDeckCustomizer('all'));
+
+function openDeckCustomizer(filter){
+  filter = filter||'all';
+  const filters=[
+    {key:'all',label:'Усі'},{key:'major',label:'Старші'},{key:'wands',label:'Жезли'},
+    {key:'cups',label:'Кубки'},{key:'swords',label:'Мечі'},{key:'pentacles',label:'Пентаклі'},
+  ];
+  const items = DECK.map((c,i)=>({c,i})).filter(({c})=>{
+    if(filter==='all') return true;
+    if(filter==='major') return c.arcana==='major';
+    return c.suitKey===filter;
+  });
+  const tabsHTML = filters.map(f=>`<button class="choice-btn ${f.key===filter?'active':''}" data-filt="${f.key}">${f.label}</button>`).join('');
+  const gridHTML = items.map(({c,i})=>`
+    <div class="dgcell" data-idx="${i}">
+      ${cardVisualHTML(c,i)}
+      <div class="dgname">${c.name}</div>
+      ${customImages[i]?`<div class="dgreset" data-reset="${i}">×</div>`:''}
+    </div>`).join('');
+  detail.innerHTML = `
+    <div class="dpos">Оформлення колоди</div>
+    <h2 style="font-family:var(--serif);margin:6px 0 8px;">Завантаж власні зображення</h2>
+    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки — заміниш її символ своїм фото чи малюнком (це діє лише в цій сесії, не зберігається після перезавантаження).</p>
+    <div class="spread-row" id="dgTabs" style="margin-bottom:10px;">${tabsHTML}</div>
+    <div class="deckgrid">${gridHTML}</div>
+    <div class="dactions"><button class="dclose" id="btnCloseDG">Закрити</button></div>
+  `;
+  overlay.classList.add('show');
+  el('dgTabs').addEventListener('click', e=>{
+    const b=e.target.closest('[data-filt]'); if(!b) return; openDeckCustomizer(b.dataset.filt);
+  });
+  detail.querySelectorAll('[data-reset]').forEach(btn=>{
+    btn.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      delete customImages[parseInt(btn.dataset.reset,10)];
+      openDeckCustomizer(filter);
+      if(board.classList.contains('show')) renderBoard();
+    });
+  });
+  detail.querySelectorAll('.dgcell').forEach(cell=>{
+    cell.addEventListener('click', ()=>{
+      pendingUploadDeckIdx = parseInt(cell.dataset.idx,10);
+      pendingUploadRefresh = ()=>openDeckCustomizer(filter);
+      customImgInput.click();
+    });
+  });
+  el('btnCloseDG').addEventListener('click', ()=>overlay.classList.remove('show'));
+}
+
+{
+  const c=document.createElement('div'); c.className='card-back'; c.style.zIndex=0;
+  deckStack.appendChild(c);
+  for(let i=1;i<=6;i++){
+    const b=document.createElement('div');
+    b.className='card-back';
+    b.style.transform=`translate(${i*3}px, ${i*3}px)`;
+    b.style.zIndex=-i;
+    b.style.opacity = 1 - i*0.04;
+    deckStack.insertBefore(b, deckStack.firstChild);
+  }
+}
+
+spreadRow.addEventListener('click', e=>{
+  const btn=e.target.closest('.choice-btn'); if(!btn) return;
+  [...spreadRow.children].forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  spreadType=btn.dataset.spread;
+  positionsConfig=SPREADS[spreadType];
+});
+shuffleBtn.addEventListener('click', doShuffle);
+
+function fisherYates(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+
+function doShuffle(){
+  question = qInput.value.trim();
+  shuffleBtn.disabled=true; spreadRow.style.pointerEvents='none'; qInput.disabled=true;
+  deckStack.classList.add('shuffling');
+  order=fisherYates(DECK.map((_,i)=>i));
+  reversedMap={}; order.forEach(i=>{reversedMap[i]=Math.random()<0.38;});
+  remaining=order.slice();
+  nodes=[]; nextId=1; pendingClarifyParentId=null;
+  summaryRow.innerHTML=''; resetRow.innerHTML='';
+
+  setTimeout(()=>{
+    deckStack.classList.remove('shuffling');
+    setupEl.style.display='none'; stage.style.display='none';
+    if(question){ qBanner.textContent='« '+question+' »'; qBanner.classList.add('show'); }
+    board.classList.add('show'); fanWrap.classList.add('show');
+    renderBoard(); renderFanLabel(); renderFan();
+  },650);
+}
+
+/* ---- board rendering ---- */
+function mainNodes(){ return nodes.filter(n=>n.parentId===null); }
+function childrenOf(id){ return nodes.filter(n=>n.parentId===id); }
+
+function slotHTML(idx, extraClass){
+  const mn = mainNodes().find(n=>n.posIndex===idx);
+  const cfg = positionsConfig[idx];
+  const wrap=document.createElement('div');
+  wrap.className='board-slot '+(extraClass||'');
+  if(mn){
+    const c=DECK[mn.deckIdx];
+    const kids=childrenOf(mn.id).length;
+    wrap.innerHTML=`<div class="mini-card" data-open="${mn.id}">
+      ${kids?`<div class="badge">+${kids}</div>`:''}
+      <div class="mc-img">${cardVisualHTML(c, mn.deckIdx)}</div>
+      <div class="nm">${c.name}</div>
+      ${mn.reversed?'<div class="rv">переверн.</div>':''}
+    </div>`;
+  } else {
+    wrap.innerHTML = `<div class="slotnum">${idx+1}</div><div>${cfg.label}</div>`;
+  }
+  return wrap;
+}
+
+function renderBoard(){
+  board.innerHTML='';
+  if(spreadType==='1'){
+    const d=document.createElement('div'); d.id='single';
+    d.appendChild(slotHTML(0)); board.appendChild(d);
+  } else if(spreadType==='3'){
+    const d=document.createElement('div'); d.id='row3';
+    positionsConfig.forEach((_,i)=>d.appendChild(slotHTML(i)));
+    board.appendChild(d);
+  } else {
+    const wrap=document.createElement('div'); wrap.id='cross-wrap';
+    const cross=document.createElement('div'); cross.className='cross';
+    const areaMap={one:0,two:1,three:2,four:3,five:4,six:5};
+    Object.keys(areaMap).forEach(area=>{
+      const s=slotHTML(areaMap[area], 'slot-'+area);
+      cross.appendChild(s);
+    });
+    const staff=document.createElement('div'); staff.className='staff';
+    for(let i=6;i<10;i++) staff.appendChild(slotHTML(i));
+    wrap.appendChild(cross); wrap.appendChild(staff); board.appendChild(wrap);
+  }
+  board.querySelectorAll('[data-open]').forEach(elm=>{
+    elm.addEventListener('click', ()=>openDetail(parseInt(elm.dataset.open,10), false));
+  });
+  if(mainNodes().length>=positionsConfig.length && pendingClarifyParentId===null){
+    summaryRow.innerHTML = `<button class="primary-btn" id="btnSummary">Показати підсумок розкладу</button>`;
+    el('btnSummary').addEventListener('click', showSummary);
+  }
+}
+
+function renderFanLabel(){
+  if(pendingClarifyParentId!==null){
+    const parent = nodes.find(n=>n.id===pendingClarifyParentId);
+    fanLabel.textContent = `Витягни карту-уточнення для «${DECK[parent.deckIdx].name}»`;
+  } else if(mainNodes().length < positionsConfig.length){
+    fanLabel.textContent = `Обери карту для позиції: ${positionsConfig[mainNodes().length].label}`;
+  } else {
+    fanLabel.textContent = 'Розклад заповнено. Торкнись картки вище, щоб уточнити її додатковою картою.';
+  }
+}
+
+function renderFan(){
+  fan.innerHTML='';
+  const n=remaining.length;
+  if(n===0){ fanLabel.textContent='Колода вичерпана — перетасуй наново.'; return; }
+  const spread=Math.min(104, 36+n*0.85);
+  remaining.forEach((deckIdx,pos)=>{
+    const angle = n<=1?0:(-spread/2 + spread*pos/(n-1));
+    const c=document.createElement('div');
+    c.className='tcard'; c.dataset.pos=pos;
+    c.style.setProperty('--ang', angle.toFixed(2)+'deg');
+    c.style.zIndex=pos;
+    fan.appendChild(c);
+  });
+}
+
+let dragging=false, hoveredIdx=null, hoveredEl=null;
+fan.addEventListener('pointerdown', e=>{ dragging=true; fan.setPointerCapture(e.pointerId); updateHover(e); });
+fan.addEventListener('pointermove', e=>{ if(dragging) updateHover(e); });
+fan.addEventListener('pointerup', ()=>{ if(!dragging) return; dragging=false;
+  if(hoveredIdx!==null) onDrawFanCard(hoveredIdx); clearHover(); });
+fan.addEventListener('pointercancel', ()=>{dragging=false; clearHover();});
+function updateHover(e){
+  const t=document.elementFromPoint(e.clientX,e.clientY);
+  const cardEl = t&&t.closest?t.closest('.tcard'):null;
+  if(cardEl===hoveredEl) return;
+  clearHover();
+  if(cardEl){
+    cardEl.classList.add('hovered');
+    cardEl.style.setProperty('--lift','-26px');
+    hoveredIdx=parseInt(cardEl.dataset.pos,10);
+    hoveredEl=cardEl;
+  } else { hoveredIdx=null; hoveredEl=null; }
+}
+function clearHover(){
+  [...fan.children].forEach(c=>{c.classList.remove('hovered'); c.style.setProperty('--lift','0px');});
+  hoveredEl=null;
+}
+
+function onDrawFanCard(fanPos){
+  if(pendingClarifyParentId===null && mainNodes().length>=positionsConfig.length) return;
+  const deckIdx=remaining[fanPos]; remaining.splice(fanPos,1);
+  const reversed=reversedMap[deckIdx];
+  let node;
+  if(pendingClarifyParentId!==null){
+    node={id:nextId++, parentId:pendingClarifyParentId, posIndex:null, deckIdx, reversed, note:''};
+    pendingClarifyParentId=null;
+  } else {
+    node={id:nextId++, parentId:null, posIndex:mainNodes().length, deckIdx, reversed, note:''};
+  }
+  nodes.push(node);
+  renderBoard(); renderFanLabel(); renderFan();
+  openDetail(node.id, true);
+}
+
+/* ---- detail overlay ---- */
+function openDetail(nodeId, isFreshDraw){
+  const node=nodes.find(n=>n.id===nodeId);
+  const c=DECK[node.deckIdx];
+  const primary = node.reversed ? c.rev : c.up;
+  const secondary = node.reversed ? c.up : c.rev;
+  const posLabel = node.parentId===null ? positionsConfig[node.posIndex].label : 'Уточнення';
+  const kids=childrenOf(node.id);
+
+  detail.innerHTML = `
+    <div class="dpos">${posLabel}</div>
+    <div class="dtitle" style="margin-bottom:10px;">
+      <div class="dnum">${c.arcana==='major'?'Старший Аркан '+c.n:c.n}</div>
+      <h2 style="margin:2px 0;">${c.name}</h2>
+      <div class="delem">${c.elem}</div>
+    </div>
+    <div class="dorient ${node.reversed?'rv':'up'}">${node.reversed?'Перевернуте положення':'Пряме положення'}</div>
+    <div class="dbigimg ${node.reversed?'flip':''}">${cardVisualHTML(c, node.deckIdx)}</div>
+    <h4>Сюжет карти</h4><p>${c.img}</p>
+    <h4>${node.reversed?'Перевернуте значення':'Пряме значення'}</h4><p>${primary}</p>
+    <h4>Ключові асоціації</h4><div class="kw">${c.kw.map(k=>`<span>${k}</span>`).join('')}</div>
+    <p class="dsecondary" style="margin-top:10px;"><strong>${node.reversed?'Пряме':'Перевернуте'} значення (для порівняння):</strong> ${secondary}</p>
+    <h4>Твоя асоціація</h4>
+    <textarea id="noteBox" placeholder="Що ця карта означає особисто для тебе в цьому контексті?">${node.note||''}</textarea>
+    ${kids.length?`<h4>Уточнення до цієї карти</h4><div class="clarList">${kids.map(k=>`<span class="clarChip" data-open="${k.id}">${DECK[k.deckIdx].name}${k.reversed?' (пер.)':''}</span>`).join('')}</div>`:''}
+    <div class="dactions">
+      <button class="dclar" id="btnUploadImg">${customImages[node.deckIdx]?'Змінити фото карти':'Своє фото цієї карти'}</button>
+      ${customImages[node.deckIdx]?`<button class="dclar" id="btnResetImg">Повернути символ</button>`:''}
+      ${remaining.length>0 ? `<button class="dclar" id="btnClarify">Уточнити цю карту</button>` : ''}
+      ${isFreshDraw && node.parentId===null && mainNodes().length<positionsConfig.length ? `<button class="dclose" id="btnNext">Далі →</button>` : `<button class="dclose" id="btnClose">Закрити</button>`}
+    </div>
+  `;
+  overlay.classList.add('show');
+  const nBox=el('noteBox'); nBox.addEventListener('input', ()=>{ node.note=nBox.value; });
+  detail.querySelectorAll('.clarChip').forEach(chip=>{
+    chip.addEventListener('click', ()=>openDetail(parseInt(chip.dataset.open,10), false));
+  });
+  const closeIt=()=>overlay.classList.remove('show');
+  const ub=el('btnUploadImg'); if(ub) ub.addEventListener('click', ()=>{
+    pendingUploadDeckIdx=node.deckIdx; pendingUploadRefresh=()=>openDetail(nodeId,false);
+    customImgInput.click();
+  });
+  const rib=el('btnResetImg'); if(rib) rib.addEventListener('click', ()=>{
+    delete customImages[node.deckIdx]; openDetail(nodeId,false); renderBoard();
+  });
+  const nb=el('btnNext'); if(nb) nb.addEventListener('click', ()=>{closeIt(); renderFanLabel();});
+  const cb=el('btnClose'); if(cb) cb.addEventListener('click', closeIt);
+  const clb=el('btnClarify'); if(clb) clb.addEventListener('click', ()=>{
+    pendingClarifyParentId=node.id; closeIt(); renderFanLabel();
+  });
+}
+
+/* ---- narrative ---- */
+const NARRATIVE_CONNECTORS = {
+ 'Відповідь': c=>`Пряма відповідь колоди — «${c.name}»`,
+ 'Минуле': c=>`Усе починається з «${c.name}»`,
+ 'Теперішнє': c=>`Зараз на першому плані «${c.name}»`,
+ 'Майбутнє': c=>`А попереду проступає «${c.name}»`,
+ 'Суть питання': c=>`В основі ситуації лежить «${c.name}»`,
+ 'Виклик': c=>`Цьому прямо протистоїть «${c.name}»`,
+ 'Коріння (причина)': c=>`Корінь цього сягає глибше — до «${c.name}»`,
+ 'Можливий розвиток': c=>`Якщо все піде своєю чергою, вимальовується «${c.name}»`,
+ 'Найближче майбутнє': c=>`Уже зовсім скоро дасться взнаки «${c.name}»`,
+ 'Твоя позиція': c=>`Сам(а) ти в цьому перебуваєш у стані «${c.name}»`,
+ 'Оточення': c=>`Ззовні на ситуацію впливає «${c.name}»`,
+ 'Надії та страхи': c=>`Внутрішньо тут переплітаються надія і острах — «${c.name}»`,
+ 'Підсумок': c=>`І все це, схоже, веде до «${c.name}»`,
+};
+function lowerFirst(s){ return s.charAt(0).toLowerCase()+s.slice(1); }
+function buildNarrative(mn, posConfig, allNodes){
+  const sentences = mn.map(n=>{
+    const c=DECK[n.deckIdx];
+    const label = posConfig[n.posIndex].label;
+    const connector = NARRATIVE_CONNECTORS[label] ? NARRATIVE_CONNECTORS[label](c) : `Далі — «${c.name}»`;
+    const orient = n.reversed ? ' у перевернутому положенні' : '';
+    const kids = allNodes.filter(k=>k.parentId===n.id);
+    let s = `${connector}${orient}: ${lowerFirst(n.reversed?c.rev:c.up)}`;
+    if(kids.length){
+      const names = kids.map(k=>`«${DECK[k.deckIdx].name}»`).join(' і ');
+      const explain = kids.map(k=>lowerFirst(k.reversed?DECK[k.deckIdx].rev:DECK[k.deckIdx].up)).join(' ');
+      s += ` Уточнення додає ${names}: ${explain}`;
+    }
+    return s;
+  });
+  let paragraphs;
+  if(mn.length<=3) paragraphs=[sentences.join(' ')];
+  else paragraphs=[sentences.slice(0,6).join(' '), sentences.slice(6).join(' ')];
+  paragraphs.push(synthesize(mn).join(' '));
+  return paragraphs.filter(p=>p.trim().length>0);
+}
+
+/* ---- synthesis / summary ---- */
+function synthesize(mn){
+  mn = mn || mainNodes();
+  const majors=mn.filter(n=>DECK[n.deckIdx].arcana==='major').length;
+  const minors=mn.length-majors;
+  const reversedCount=mn.filter(n=>n.reversed).length;
+  const suitCounts={};
+  mn.forEach(n=>{ const c=DECK[n.deckIdx]; if(c.arcana==='minor'){ suitCounts[c.suitKey]=(suitCounts[c.suitKey]||0)+1; } });
+  const numCounts={};
+  mn.forEach(n=>{ const c=DECK[n.deckIdx]; if(c.arcana==='minor'){ numCounts[c.n]=(numCounts[c.n]||0)+1; } });
+
+  const lines=[];
+  if(majors>minors) lines.push('У розкладі переважають Старші Аркани — це радше про глибинні, архетипні процеси, ніж про побутові деталі.');
+  else if(minors>majors) lines.push('У розкладі переважають Молодші Аркани — йдеться більше про конкретні, повсякденні аспекти ситуації.');
+  else if(mn.length>1) lines.push('Старші й Молодші Аркани у рівновазі — і глибинна тема, і конкретні дії важливі однаково.');
+
+  const dominantSuit=Object.entries(suitCounts).sort((a,b)=>b[1]-a[1])[0];
+  if(dominantSuit && dominantSuit[1]>=2) lines.push(`Масть «${SUITS[dominantSuit[0]].name}» зустрічається кілька разів — фокус ситуації лежить у сфері ${SUITS[dominantSuit[0]].domain}.`);
+
+  const dominantNum=Object.entries(numCounts).sort((a,b)=>b[1]-a[1])[0];
+  if(dominantNum && dominantNum[1]>=2) lines.push(`Число «${dominantNum[0]}» повторюється — варто звернути увагу на його тему в кількох сферах одразу.`);
+
+  if(mn.length>1){
+    if(reversedCount >= Math.ceil(mn.length/2)) lines.push('Багато перевернутих карт — можливо, є внутрішній опір, блок або тема, яку ситуація ще не готова показати прямо.');
+    else if(reversedCount===0) lines.push('Усі карти прямі — енергії розкладу виражені відкрито, без прихованих блоків.');
+  }
+  lines.push('Спробуй сам(а) помітити додаткові зв’язки між картами — це і є суть роботи з архетипами.');
+  return lines;
+}
+
+function showSummary(mode){
+  mode = mode || 'structured';
+  const mn=mainNodes();
+  let bodyHTML;
+  if(mode==='structured'){
+    const rows = mn.map(n=>{
+      const c=DECK[n.deckIdx];
+      return `<p style="margin-bottom:6px;"><strong>${positionsConfig[n.posIndex].label}:</strong> ${c.name} ${n.reversed?'<span style="color:#8f2a2a;">(перевернута)</span>':''}</p>`;
+    }).join('');
+    const synth = synthesize(mn).map(l=>`<p>${l}</p>`).join('');
+    bodyHTML = rows + `<h4>Спільні теми</h4>` + synth;
+  } else {
+    const paragraphs = buildNarrative(mn, positionsConfig, nodes);
+    bodyHTML = `<h4>Розклад як оповідання</h4>` + paragraphs.map(p=>`<p style="margin-bottom:12px;">${p}</p>`).join('');
+  }
+  detail.innerHTML = `
+    <div class="dpos">Підсумок розкладу</div>
+    <h2 style="font-family:var(--serif);margin:6px 0 12px;">${question?('« '+question+' »'):'Загальний огляд'}</h2>
+    ${bodyHTML}
+    <div class="dactions">
+      <button class="dclar" id="btnToggleMode">${mode==='structured'?'Прочитати як оповідання':'До структурованого підсумку'}</button>
+      <button class="dclar" id="btnCloseSum">Закрити</button>
+      <button class="dclose" id="btnSaveNew">Зберегти в історію та почати нову</button>
+    </div>
+  `;
+  overlay.classList.add('show');
+  el('btnToggleMode').addEventListener('click', ()=>showSummary(mode==='structured'?'narrative':'structured'));
+  el('btnCloseSum').addEventListener('click', ()=>overlay.classList.remove('show'));
+  el('btnSaveNew').addEventListener('click', ()=>{
+    overlay.classList.remove('show');
+    history.unshift({
+      id:Date.now(), question, spreadType, positionsConfig,
+      nodes: JSON.parse(JSON.stringify(nodes)), when:new Date()
+    });
+    resetToSetup();
+  });
+}
+
+function resetToSetup(){
+  setupEl.style.display='flex'; stage.style.display='none';
+  qBanner.classList.remove('show'); board.classList.remove('show'); board.innerHTML='';
+  fanWrap.classList.remove('show'); fan.innerHTML='';
+  summaryRow.innerHTML=''; resetRow.innerHTML='';
+  shuffleBtn.disabled=false; spreadRow.style.pointerEvents='auto'; qInput.disabled=false; qInput.value='';
+  renderHistPanel();
+}
+
+/* ---- history ---- */
+histBtn.addEventListener('click', ()=>{
+  histPanel.classList.toggle('show');
+  if(histPanel.classList.contains('show')) renderHistPanel();
+});
+function renderHistPanel(){
+  if(!histPanel.classList.contains('show')) return;
+  if(history.length===0){
+    histPanel.innerHTML = `<h3>Історія розкладів</h3><div class="histEmpty">Поки що порожньо — історія зберігається лише під час цієї сесії.</div>`;
+    return;
+  }
+  histPanel.innerHTML = `<h3>Історія розкладів</h3>` + history.map((h,idx)=>{
+    const label = h.spreadType==='1'?'1 карта':h.spreadType==='3'?'3 карти':'Кельтський хрест';
+    const names = h.nodes.filter(n=>n.parentId===null).map(n=>DECK[n.deckIdx].name).join(', ');
+    return `<div class="histItem" data-idx="${idx}">
+      <div class="hq">${h.question?('« '+h.question+' »'):'Без питання'}</div>
+      <div class="hm">${label} · ${names}</div>
+    </div>`;
+  }).join('');
+  histPanel.querySelectorAll('.histItem').forEach(it=>{
+    it.addEventListener('click', ()=>openHistoryEntry(parseInt(it.dataset.idx,10)));
+  });
+}
+function openHistoryEntry(idx, mode){
+  mode = mode || 'structured';
+  const h=history[idx];
+  const mn=h.nodes.filter(n=>n.parentId===null);
+  let bodyHTML;
+  if(mode==='structured'){
+    bodyHTML = mn.map(n=>{
+      const c=DECK[n.deckIdx];
+      const kids=h.nodes.filter(k=>k.parentId===n.id);
+      return `<p style="margin-bottom:6px;"><strong>${h.positionsConfig[n.posIndex].label}:</strong> ${c.name} ${n.reversed?'(перевернута)':''}${n.note?`<br><span style="color:var(--ink-soft);font-size:12px;">Нотатка: ${n.note}</span>`:''}${kids.length?`<br><span style="color:var(--ink-soft);font-size:12px;">Уточнення: ${kids.map(k=>DECK[k.deckIdx].name).join(', ')}</span>`:''}</p>`;
+    }).join('');
+  } else {
+    const paragraphs = buildNarrative(mn, h.positionsConfig, h.nodes);
+    bodyHTML = `<h4>Розклад як оповідання</h4>` + paragraphs.map(p=>`<p style="margin-bottom:12px;">${p}</p>`).join('');
+  }
+  detail.innerHTML = `
+    <div class="dpos">${new Date(h.when).toLocaleString('uk-UA')}</div>
+    <h2 style="font-family:var(--serif);margin:6px 0 12px;">${h.question?('« '+h.question+' »'):'Без питання'}</h2>
+    ${bodyHTML}
+    <div class="dactions">
+      <button class="dclar" id="btnToggleHistMode">${mode==='structured'?'Прочитати як оповідання':'До структурованого вигляду'}</button>
+      <button class="dclose" id="btnCloseHist">Закрити</button>
+    </div>
+  `;
+  overlay.classList.add('show');
+  el('btnToggleHistMode').addEventListener('click', ()=>openHistoryEntry(idx, mode==='structured'?'narrative':'structured'));
+  el('btnCloseHist').addEventListener('click', ()=>overlay.classList.remove('show'));
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
