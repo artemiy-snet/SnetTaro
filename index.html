@@ -495,6 +495,71 @@ function loadImageAsDataURL(file, maxDim, cb){
   };
   reader.readAsDataURL(file);
 }
+
+/* ---- auto card compositing: frame + name + suit/numeral badge in the corner ---- */
+function svgIconStandalone(key, color){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <g fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]||''}</g>
+  </svg>`;
+}
+function svgToImage(svgString, cb){
+  const img = new Image();
+  img.onload = ()=>cb(img);
+  img.onerror = ()=>cb(null);
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+}
+function composeCardImage(rawDataURL, card, cb){
+  const img = new Image();
+  img.onload = ()=>{
+    const W=480, H=706;
+    const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H;
+    const ctx=canvas.getContext('2d');
+
+    const scale = Math.max(W/img.width, H/img.height);
+    const dw=img.width*scale, dh=img.height*scale;
+    ctx.drawImage(img, (W-dw)/2, (H-dh)/2, dw, dh);
+
+    const grad = ctx.createLinearGradient(0,H*0.66,0,H);
+    grad.addColorStop(0,'rgba(18,15,28,0)');
+    grad.addColorStop(1,'rgba(18,15,28,0.88)');
+    ctx.fillStyle=grad; ctx.fillRect(0,H*0.55,W,H*0.45);
+
+    ctx.fillStyle='#f4efe3';
+    ctx.textAlign='center';
+    ctx.font = `700 30px Georgia, serif`;
+    ctx.fillText(card.name, W/2, H*0.935, W*0.82);
+    ctx.font = `12px Georgia, serif`;
+    ctx.fillStyle='#c9a24b';
+    ctx.fillText((card.arcana==='major'?('Старший Аркан '+card.n):card.name.split(' ').slice(-1)[0]).toUpperCase(), W/2, H*0.88, W*0.8);
+
+    const finishFrame = ()=>{
+      const lw1=Math.round(W*0.028);
+      ctx.strokeStyle='#c9a24b'; ctx.lineWidth=lw1;
+      ctx.strokeRect(lw1/2, lw1/2, W-lw1, H-lw1);
+      const inset=W*0.055;
+      ctx.strokeStyle='rgba(201,162,75,0.65)'; ctx.lineWidth=Math.round(W*0.007);
+      ctx.strokeRect(inset, inset, W-inset*2, H-inset*2);
+      cb(canvas.toDataURL('image/jpeg',0.88));
+    };
+
+    const badgeSVG = svgIconStandalone(card.iconKey, card.iconColor);
+    svgToImage(badgeSVG, badgeImg=>{
+      const bx=W*0.165, by=H*0.12, br=W*0.11;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2);
+      ctx.fillStyle='rgba(18,15,28,0.78)'; ctx.fill();
+      ctx.lineWidth=W*0.012; ctx.strokeStyle='#c9a24b'; ctx.stroke();
+      if(badgeImg){
+        ctx.clip();
+        ctx.drawImage(badgeImg, bx-br*0.72, by-br*0.72, br*1.44, br*1.44);
+      }
+      ctx.restore();
+      finishFrame();
+    });
+  };
+  img.onerror = ()=>cb(rawDataURL);
+  img.src = rawDataURL;
+}
 const RANKS = [
  {label:'Туз',n:'A',up:d=>`Чистий, ще не оформлений потенціал у сфері ${d}. Нова можливість щойно з’являється.`,rev:d=>`Втрачена або заблокована можливість у сфері ${d} — потенціал, який поки не вдається використати.`},
  {label:'Двійка',n:'2',up:d=>`Вибір або баланс двох сил у сфері ${d}. Потрібно зважити варіанти.`,rev:d=>`Нерішучість, застрягання між двома варіантами у сфері ${d}.`},
@@ -572,11 +637,14 @@ let pendingUploadDeckIdx=null, pendingUploadRefresh=null;
 customImgInput.addEventListener('change', e=>{
   const file=e.target.files[0]; customImgInput.value='';
   if(!file || pendingUploadDeckIdx===null) return;
-  loadImageAsDataURL(file, 640, dataURL=>{
-    customImages[pendingUploadDeckIdx]=dataURL;
-    idbSet(pendingUploadDeckIdx, dataURL);
-    if(pendingUploadRefresh) pendingUploadRefresh();
-    if(board.classList.contains('show')) renderBoard();
+  const card = DECK[pendingUploadDeckIdx];
+  loadImageAsDataURL(file, 900, rawDataURL=>{
+    composeCardImage(rawDataURL, card, finalDataURL=>{
+      customImages[pendingUploadDeckIdx]=finalDataURL;
+      idbSet(pendingUploadDeckIdx, finalDataURL);
+      if(pendingUploadRefresh) pendingUploadRefresh();
+      if(board.classList.contains('show')) renderBoard();
+    });
   });
 });
 deckCustomBtn.addEventListener('click', ()=>openDeckCustomizer('all'));
@@ -602,7 +670,7 @@ function openDeckCustomizer(filter){
   detail.innerHTML = `
     <div class="dpos">Оформлення колоди</div>
     <h2 style="font-family:var(--serif);margin:6px 0 8px;">Завантаж власні зображення</h2>
-    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки — заміниш її символ своїм фото чи малюнком. Зображення зберігаються на цьому пристрої й залишаться навіть після закриття застосунку.</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки — обери будь-яке фото, і застосунок сам впише його в рамку, підпише назву й додасть значок масті в кутку. Зберігається на цьому пристрої назавжди.</p>
     <div class="spread-row" id="dgTabs" style="margin-bottom:10px;">${tabsHTML}</div>
     <div class="deckgrid">${gridHTML}</div>
     <div class="dactions"><button class="dclose" id="btnCloseDG">Закрити</button></div>
