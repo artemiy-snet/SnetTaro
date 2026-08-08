@@ -943,7 +943,11 @@ function highlightWordAt(msgIndex, charIndex){
 
 function speakMessage(i){
   const m = aiChatHistory[i];
-  if(!m || !('speechSynthesis' in window)) return;
+  if(!m) return;
+  if(!('speechSynthesis' in window)){
+    alert('Цей браузер не підтримує озвучення (speechSynthesis недоступний).');
+    return;
+  }
   const clean = speechSanitize(m.content);
   if(!clean) return;
   const synth = window.speechSynthesis;
@@ -957,22 +961,30 @@ function speakMessage(i){
       if(ukVoice) u.voice = ukVoice;
       u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, e.charIndex); };
       u.onend = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
-      u.onerror = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
+      u.onerror = ev=>{
+        currentSpeakMsgIndex=null;
+        renderChatUI(false);
+        alert('Помилка озвучення: ' + (ev && ev.error ? ev.error : 'невідома') + '. Спробуй ще раз або перезавантаж сторінку.');
+      };
       synth.speak(u);
-    }catch(e){ currentSpeakMsgIndex=null; }
+      // Some Android WebViews accept speak() but never actually start.
+      // If nothing happens within a second, tell the user instead of silence.
+      setTimeout(()=>{
+        if(!synth.speaking && !synth.pending && currentSpeakMsgIndex===i){
+          currentSpeakMsgIndex=null; renderChatUI(false);
+          alert('Синтезатор мовлення не відповів. Це обмеження цього браузера/пристрою, а не застосунку.');
+        }
+      }, 1200);
+    }catch(e){
+      currentSpeakMsgIndex=null; renderChatUI(false);
+      alert('Не вдалося запустити озвучення: ' + (e && e.message ? e.message : e));
+    }
   };
 
   currentSpeakMsgIndex = i;
   renderChatUI(false);
-  // Only cancel+delay if something is actually mid-speech (a known Android quirk);
-  // otherwise speak immediately, synchronously within the click, so the browser
-  // still treats this as a direct user-initiated action.
-  if(synth.speaking || synth.pending){
-    synth.cancel();
-    setTimeout(startSpeaking, 120);
-  } else {
-    startSpeaking();
-  }
+  synth.cancel();
+  setTimeout(startSpeaking, 100);
 }
 
 function toggleMic(){
@@ -1493,18 +1505,12 @@ if('serviceWorker' in navigator){
   });
 }
 
-/* Warm up speech synthesis on load — on some Android Chrome builds the very
-   first real utterance is silently dropped while the voice list is still
-   loading. Priming it early (silently) prevents that "first message doesn't
-   read" glitch for the actual first AI reply. */
+/* Just prime the voice list — no silent warm-up utterance (that can leave
+   speechSynthesis stuck "speaking" forever on some Android builds if the
+   silent utterance never fires its end event, blocking everything after). */
 if('speechSynthesis' in window){
   window.speechSynthesis.getVoices();
   window.speechSynthesis.onvoiceschanged = ()=>{ window.speechSynthesis.getVoices(); };
-  try{
-    const warm = new SpeechSynthesisUtterance(' ');
-    warm.volume = 0;
-    window.speechSynthesis.speak(warm);
-  }catch(e){}
 }
 
 idbLoadAll().then(saved=>{
