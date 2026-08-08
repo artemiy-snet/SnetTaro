@@ -30,7 +30,7 @@
       var(--bg); min-height:100vh;}
   #app{max-width:540px;margin:0 auto;padding:18px 16px 44px;position:relative;min-height:100vh;isolation:isolate;}
 
-  header{text-align:center;position:relative;margin-bottom:4px;}
+  header{text-align:center;position:relative;margin-bottom:4px;padding-top:38px;}
   header .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);}
   header h1{font-family:var(--serif);font-weight:600;font-size:26px;margin:4px 0 2px;color:var(--parchment);}
   header p.sub{font-size:12px;color:#9d95b5;margin:0;line-height:1.5;}
@@ -40,6 +40,10 @@
   }
   #deckCustomBtn{
     position:absolute;left:0;top:2px;background:none;border:1px solid #362c52;color:#b8afd0;
+    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
+  }
+  #aiSettingsBtn{
+    position:absolute;left:50%;top:2px;transform:translateX(-50%);background:none;border:1px solid #4a3f6b;color:var(--gold-dim);
     border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
   }
   .divider{width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:14px auto 16px;}
@@ -222,7 +226,7 @@
   <header>
     <button id="histBtn">Історія</button>
     <button id="deckCustomBtn">Колода</button>
-    <div class="eyebrow">Навчальний тренажер</div>
+    <button id="aiSettingsBtn">ШІ</button>
     <h1>SnetTaro</h1>
     <p class="sub">Сформулюй питання, обери розклад, перетасуй колоду —<br>і потягни пальцем по віялу, щоб витягнути карту.</p>
   </header>
@@ -429,14 +433,18 @@ function svgIcon(key){
 const customImages = {}; // deckIdx -> dataURL, persisted in IndexedDB on this device
 
 /* ---- persistent storage (IndexedDB) so custom card images survive reloads ---- */
-const IDB_NAME='snettaro-db', IDB_VERSION=1, IDB_STORE='customImages';
+const IDB_NAME='snettaro-db', IDB_VERSION=2, IDB_STORE='customImages', IDB_SETTINGS='settings';
 let idbPromise=null;
 function openIDB(){
   if(idbPromise) return idbPromise;
   idbPromise = new Promise((resolve,reject)=>{
     if(!('indexedDB' in window)){ reject(new Error('no indexeddb')); return; }
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-    req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_STORE); };
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      if(!db.objectStoreNames.contains(IDB_SETTINGS)) db.createObjectStore(IDB_SETTINGS);
+    };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror = ()=>reject(req.error);
   });
@@ -458,6 +466,37 @@ async function idbDelete(key){
     await new Promise((res,rej)=>{
       const tx=db.transaction(IDB_STORE,'readwrite');
       tx.objectStore(IDB_STORE).delete(String(key));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){}
+}
+async function idbSetSetting(key, value){
+  try{
+    const db = await openIDB();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_SETTINGS,'readwrite');
+      tx.objectStore(IDB_SETTINGS).put(value, key);
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){}
+}
+async function idbGetSetting(key){
+  try{
+    const db = await openIDB();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_SETTINGS,'readonly');
+      const req=tx.objectStore(IDB_SETTINGS).get(key);
+      req.onsuccess=()=>res(req.result);
+      req.onerror=()=>rej(req.error);
+    });
+  }catch(e){ return undefined; }
+}
+async function idbDeleteSetting(key){
+  try{
+    const db = await openIDB();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_SETTINGS,'readwrite');
+      tx.objectStore(IDB_SETTINGS).delete(key);
       tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
     });
   }catch(e){}
@@ -659,6 +698,7 @@ const overlay=el('overlay'), detail=el('detail');
 const resetRow=el('resetRow'), summaryRow=el('summaryRow');
 const histBtn=el('histBtn'), histPanel=el('histPanel');
 const deckCustomBtn=el('deckCustomBtn'), customImgInput=el('customImgInput');
+const aiSettingsBtn=el('aiSettingsBtn');
 let pendingUploadDeckIdx=null, pendingUploadRefresh=null;
 
 customImgInput.addEventListener('change', e=>{
@@ -675,6 +715,136 @@ customImgInput.addEventListener('change', e=>{
   });
 });
 deckCustomBtn.addEventListener('click', ()=>openDeckCustomizer('all'));
+aiSettingsBtn.addEventListener('click', ()=>openAISettings());
+
+/* ---- AI-powered deep reading: user's own Anthropic API key, called directly
+   from the browser (Anthropic supports this via the anthropic-dangerous-direct-
+   browser-access header — a documented "bring your own key" pattern). The key
+   never leaves this device except in the direct request to Anthropic itself. */
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function openAISettings(){
+  Promise.all([idbGetSetting('apiKey'), idbGetSetting('model')]).then(([key, model])=>{
+    model = model || 'claude-haiku-4-5-20251001';
+    detail.innerHTML = `
+      <div class="dpos">Налаштування</div>
+      <h2 style="font-family:var(--serif);margin:6px 0 10px;">Власний ключ Anthropic</h2>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;">
+        Ключ зберігається лише на цьому пристрої, в цьому браузері, і використовується тільки для прямого запиту до Anthropic — ніде більше не передається. Ти сам(а) відповідаєш за оплату використання на своєму акаунті.<br><br>
+        Отримати ключ: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="color:var(--gold-dim);">console.anthropic.com → API Keys</a>
+      </p>
+      <h4>API-ключ</h4>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-..." value="${key?escapeHtml(key):''}"
+        style="width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;box-sizing:border-box;">
+      <h4>Модель</h4>
+      <select id="modelSelect" style="width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:11px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;box-sizing:border-box;">
+        <option value="claude-haiku-4-5-20251001" ${model==='claude-haiku-4-5-20251001'?'selected':''}>Швидко й дешево (Haiku)</option>
+        <option value="claude-sonnet-5" ${model==='claude-sonnet-5'?'selected':''}>Глибше й якісніше (Sonnet)</option>
+      </select>
+      <div class="dactions">
+        <button class="dclose" id="btnSaveKey">Зберегти</button>
+        ${key?`<button class="dclar" id="btnClearKey">Прибрати ключ</button>`:''}
+        <button class="dclar" id="btnCloseSettings">Закрити</button>
+      </div>
+    `;
+    overlay.classList.add('show');
+    el('btnSaveKey').addEventListener('click', ()=>{
+      const v = el('apiKeyInput').value.trim();
+      const m = el('modelSelect').value;
+      if(v) idbSetSetting('apiKey', v);
+      idbSetSetting('model', m);
+      overlay.classList.remove('show');
+    });
+    const cb=el('btnClearKey'); if(cb) cb.addEventListener('click', ()=>{
+      idbDeleteSetting('apiKey'); overlay.classList.remove('show');
+    });
+    el('btnCloseSettings').addEventListener('click', ()=>overlay.classList.remove('show'));
+  });
+}
+
+async function callClaudeReading(promptText, apiKey, model){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model: model || 'claude-haiku-4-5-20251001',
+      max_tokens: 1800,
+      messages: [{role:'user', content: promptText}]
+    })
+  });
+  const data = await res.json().catch(()=>null);
+  if(!res.ok){
+    throw new Error((data && data.error && data.error.message) || ('Помилка запиту (HTTP '+res.status+')'));
+  }
+  return (data.content||[]).map(b=>b.text||'').join('\n');
+}
+
+function buildAIPrompt(mn){
+  const btn = spreadRow.querySelector(`[data-spread="${spreadType}"]`);
+  const spreadLabel = btn ? btn.textContent : `${positionsConfig.length} карт`;
+  const lines = mn.map(n=>{
+    const c=DECK[n.deckIdx];
+    const meaning = n.reversed?c.rev:c.up;
+    return `${positionsConfig[n.posIndex].label}: ${c.name}${n.reversed?' (перевернута)':''} — ${meaning}${n.note?` [особиста нотатка людини: ${n.note}]`:''}`;
+  }).join('\n');
+  return `Ти — досвідчений, психологічно грамотний таролог-скептик, який працює в архетипній, а не містичній рамці.
+Розклад: ${spreadLabel}.
+${question?`Питання людини: «${question}»`:'Питання не вказане — загальний огляд.'}
+Карти в позиціях:
+${lines}
+
+Напиши глибокий, зв'язний розбір цього розкладу українською мовою — так, як це робить досвідчений практик: не перелік значень по черзі, а справжній аналіз взаємодій. Обов'язково відзнач:
+— структурні патерни (наприклад, чи згруповані перевернуті карти в певній частині розкладу; чи повторюється якась масть чи число в ключових позиціях);
+— як карти логічно продовжують чи суперечать одна одній від позиції до позиції;
+— один цілісний сюжет наприкінці, що пов'язує все докупи.
+Тримайся психологічної, архетипної рамки (інструмент самоаналізу, а не пророцтво), без містичної патетики. Пиши природною українською, розбий на змістовні абзаци з короткими підзаголовками там, де це природно.`;
+}
+
+async function runAIAnalysis(){
+  const key = await idbGetSetting('apiKey');
+  if(!key){ openAISettings(); return; }
+  const model = (await idbGetSetting('model')) || 'claude-haiku-4-5-20251001';
+  const mn = mainNodes();
+  const prompt = buildAIPrompt(mn);
+  detail.innerHTML = `
+    <div class="dpos">Глибокий аналіз</div>
+    <h2 style="font-family:var(--serif);margin:10px 0;">Claude читає розклад…</h2>
+    <p style="text-align:center;color:var(--ink-soft);font-size:13px;">Зазвичай це займає кілька секунд.</p>
+  `;
+  overlay.classList.add('show');
+  try{
+    const text = await callClaudeReading(prompt, key, model);
+    const paragraphs = text.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
+    detail.innerHTML = `
+      <div class="dpos">Глибокий аналіз · ${model==='claude-sonnet-5'?'Sonnet':'Haiku'}</div>
+      <h2 style="font-family:var(--serif);margin:6px 0 12px;">${question?('« '+question+' »'):'Загальний огляд'}</h2>
+      ${paragraphs.map(p=>`<p style="margin-bottom:12px;white-space:pre-wrap;">${escapeHtml(p)}</p>`).join('')}
+      <div class="dactions">
+        <button class="dclar" id="btnBackSum">Назад до підсумку</button>
+        <button class="dclose" id="btnCloseAI">Закрити</button>
+      </div>
+    `;
+    el('btnBackSum').addEventListener('click', ()=>showSummary('structured'));
+    el('btnCloseAI').addEventListener('click', ()=>overlay.classList.remove('show'));
+  }catch(e){
+    detail.innerHTML = `
+      <div class="dpos">Не вдалося отримати аналіз</div>
+      <p>${escapeHtml(e.message||'Невідома помилка запиту до Anthropic API.')}</p>
+      <p style="font-size:12px;color:var(--ink-soft);">Перевір ключ у налаштуваннях і баланс на console.anthropic.com.</p>
+      <div class="dactions">
+        <button class="dclar" id="btnOpenSettingsErr">Налаштування ШІ</button>
+        <button class="dclose" id="btnBackErr">Назад до підсумку</button>
+      </div>
+    `;
+    el('btnBackErr').addEventListener('click', ()=>showSummary('structured'));
+    el('btnOpenSettingsErr').addEventListener('click', openAISettings);
+  }
+}
 
 function openDeckCustomizer(filter){
   filter = filter||'all';
@@ -1030,12 +1200,14 @@ function showSummary(mode){
     ${bodyHTML}
     <div class="dactions">
       <button class="dclar" id="btnToggleMode">${mode==='structured'?'Прочитати як оповідання':'До структурованого підсумку'}</button>
+      <button class="dclar" id="btnAIAnalysis">🔮 Глибокий аналіз (ШІ)</button>
       <button class="dclar" id="btnCloseSum">Закрити</button>
       <button class="dclose" id="btnSaveNew">Зберегти в історію та почати нову</button>
     </div>
   `;
   overlay.classList.add('show');
   el('btnToggleMode').addEventListener('click', ()=>showSummary(mode==='structured'?'narrative':'structured'));
+  el('btnAIAnalysis').addEventListener('click', runAIAnalysis);
   el('btnCloseSum').addEventListener('click', ()=>overlay.classList.remove('show'));
   el('btnSaveNew').addEventListener('click', ()=>{
     overlay.classList.remove('show');
