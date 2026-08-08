@@ -951,24 +951,32 @@ function speakMessage(i){
   const clean = speechSanitize(m.content);
   if(!clean) return;
   const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
 
-  const startSpeaking = ()=>{
+  const attemptSpeak = (useLang, useVoice, isRetry)=>{
     try{
       const u = new SpeechSynthesisUtterance(clean);
-      u.lang = 'uk-UA';
-      const voices = synth.getVoices();
-      const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
-      if(ukVoice) u.voice = ukVoice;
+      if(useLang) u.lang = useLang;
+      if(useVoice) u.voice = useVoice;
       u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, e.charIndex); };
       u.onend = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
       u.onerror = ev=>{
+        const errName = ev && ev.error;
+        if(!isRetry && (errName==='synthesis-failed' || errName==='language-unavailable' || errName==='voice-unavailable')){
+          // retry once with the device default voice/language instead of forcing uk-UA
+          attemptSpeak(null, null, true);
+          return;
+        }
         currentSpeakMsgIndex=null;
         renderChatUI(false);
-        alert('Помилка озвучення: ' + (ev && ev.error ? ev.error : 'невідома') + '. Спробуй ще раз або перезавантаж сторінку.');
+        if(errName==='synthesis-failed' || errName==='language-unavailable' || errName==='voice-unavailable'){
+          alert('На цьому пристрої не встановлено голос для української мови (навіть запасний варіант не спрацював).\n\nЩоб виправити: Налаштування телефону → Система → Мова та введення → Синтез мовлення (Text-to-speech) → механізм Google → «Встановити мовні дані» → додай українську.');
+        } else {
+          alert('Помилка озвучення: ' + (errName||'невідома') + '. Спробуй ще раз або перезавантаж сторінку.');
+        }
       };
       synth.speak(u);
-      // Some Android WebViews accept speak() but never actually start.
-      // If nothing happens within a second, tell the user instead of silence.
       setTimeout(()=>{
         if(!synth.speaking && !synth.pending && currentSpeakMsgIndex===i){
           currentSpeakMsgIndex=null; renderChatUI(false);
@@ -984,7 +992,7 @@ function speakMessage(i){
   currentSpeakMsgIndex = i;
   renderChatUI(false);
   synth.cancel();
-  setTimeout(startSpeaking, 100);
+  setTimeout(()=>attemptSpeak('uk-UA', ukVoice, false), 100);
 }
 
 function toggleMic(){
