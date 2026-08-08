@@ -1478,6 +1478,20 @@ if('serviceWorker' in navigator){
   });
 }
 
+/* Warm up speech synthesis on load — on some Android Chrome builds the very
+   first real utterance is silently dropped while the voice list is still
+   loading. Priming it early (silently) prevents that "first message doesn't
+   read" glitch for the actual first AI reply. */
+if('speechSynthesis' in window){
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = ()=>{ window.speechSynthesis.getVoices(); };
+  try{
+    const warm = new SpeechSynthesisUtterance(' ');
+    warm.volume = 0;
+    window.speechSynthesis.speak(warm);
+  }catch(e){}
+}
+
 idbLoadAll().then(saved=>{
   Object.keys(saved).forEach(k=>{ customImages[k]=saved[k]; });
   if(board.classList.contains('show')) renderBoard();
