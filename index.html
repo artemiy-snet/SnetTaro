@@ -936,22 +936,33 @@ function speakMessage(i){
   if(!m || !('speechSynthesis' in window)) return;
   const clean = speechSanitize(m.content);
   if(!clean) return;
-  window.speechSynthesis.cancel();
-  currentSpeakMsgIndex = i;
-  renderChatUI(false);
-  setTimeout(()=>{
+  const synth = window.speechSynthesis;
+
+  const startSpeaking = ()=>{
     try{
       const u = new SpeechSynthesisUtterance(clean);
       u.lang = 'uk-UA';
-      const voices = window.speechSynthesis.getVoices();
+      const voices = synth.getVoices();
       const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
       if(ukVoice) u.voice = ukVoice;
       u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, e.charIndex); };
       u.onend = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
       u.onerror = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
-      window.speechSynthesis.speak(u);
+      synth.speak(u);
     }catch(e){ currentSpeakMsgIndex=null; }
-  }, 150);
+  };
+
+  currentSpeakMsgIndex = i;
+  renderChatUI(false);
+  // Only cancel+delay if something is actually mid-speech (a known Android quirk);
+  // otherwise speak immediately, synchronously within the click, so the browser
+  // still treats this as a direct user-initiated action.
+  if(synth.speaking || synth.pending){
+    synth.cancel();
+    setTimeout(startSpeaking, 120);
+  } else {
+    startSpeaking();
+  }
 }
 
 function toggleMic(){
