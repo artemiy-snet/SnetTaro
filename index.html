@@ -135,28 +135,37 @@
   .staff{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:290px;}
   .staff .board-slot{aspect-ratio:0.68;}
 
-  /* ---- fan ---- */
+  /* ---- fan (horizontal row) ---- */
   #fanWrap{display:none;flex-direction:column;align-items:center;}
   #fanWrap.show{display:flex;}
   #fanLabel{font-family:var(--serif);font-size:14px;color:var(--gold);margin-bottom:2px;text-align:center;min-height:36px;padding:0 16px;}
   #fanHint{font-size:11px;color:#8d84a8;margin-bottom:6px;text-align:center;}
   #fan{
-    position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; width:100vw;
-    height:clamp(220px, 42vw, 320px);
-    touch-action:none;user-select:none;display:flex;justify-content:center;
+    width:100%;
+    height:clamp(150px, 32vw, 210px);
+    display:flex;align-items:flex-end;gap:8px;
+    overflow-x:auto;overflow-y:visible;
+    padding:4px 10px 14px;
+    touch-action:pan-x;user-select:none;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
   }
+  #fan::-webkit-scrollbar{height:4px;}
+  #fan::-webkit-scrollbar-thumb{background:var(--gold-dim);border-radius:2px;}
   .tcard{
-    position:absolute;left:50%;bottom:0;
-    width:clamp(56px, 15vw, 96px); height:clamp(86px, 23vw, 150px);
+    flex:0 0 auto; scroll-snap-align:center;
+    width:clamp(50px, 13vw, 80px); height:clamp(78px, 20vw, 124px);
     background:radial-gradient(circle at 50% 42%, #3a2f5c 0%, #221a38 62%, #191228 100%);
-    border:1px solid var(--gold-dim);border-radius:7px;transform-origin:50% 100%;
-    transform:translateX(-50%) rotate(var(--ang,0deg)) translateY(var(--lift,0px));
+    border:1px solid var(--gold-dim);border-radius:7px;position:relative;
     box-shadow:0 4px 10px rgba(0,0,0,.4);
-    transition:box-shadow .15s, filter .15s, transform .12s ease-out;cursor:pointer;
+    transition:box-shadow .15s, filter .15s, transform .15s ease;cursor:pointer;
   }
   .tcard::after{content:"";position:absolute;left:50%;top:36%;width:14px;height:14px;transform:translate(-50%,-50%);
     border:1px solid rgba(201,162,75,.7);border-radius:50%;}
-  .tcard.hovered{box-shadow:0 0 0 2px var(--teal), 0 14px 26px rgba(87,199,189,.5);filter:brightness(1.18);}
+  .tcard.hovered, .tcard:active{
+    transform:translateY(-14px);
+    box-shadow:0 0 0 2px var(--teal), 0 14px 26px rgba(87,199,189,.5);filter:brightness(1.18);
+  }
 
   #resetRow, #summaryRow{text-align:center;margin-top:10px;}
 
@@ -241,7 +250,7 @@
     <button class="primary-btn" id="shuffleBtn">Перетасувати колоду</button>
   </div>
 
-  <div id="stage" style="display:none;">
+  <div id="stage">
     <div id="deckStack"></div>
     <div id="deckCount">78 карт</div>
   </div>
@@ -251,7 +260,7 @@
 
   <div id="fanWrap">
     <div id="fanLabel"></div>
-    <div id="fanHint">Проведи пальцем по картах і відпусти на обраній</div>
+    <div id="fanHint">Прокрути ряд і торкнись картки, щоб витягнути</div>
     <div id="fan"></div>
   </div>
 
@@ -816,38 +825,18 @@ function renderFan(){
   fan.innerHTML='';
   const n=remaining.length;
   if(n===0){ fanLabel.textContent='Колода вичерпана — перетасуй наново.'; return; }
-  const spread=Math.min(150, 40+n*1.15);
   remaining.forEach((deckIdx,pos)=>{
-    const angle = n<=1?0:(-spread/2 + spread*pos/(n-1));
     const c=document.createElement('div');
     c.className='tcard'; c.dataset.pos=pos;
-    c.style.setProperty('--ang', angle.toFixed(2)+'deg');
-    c.style.zIndex=pos;
+    c.addEventListener('click', ()=>{
+      if(c.dataset.picked) return;
+      c.dataset.picked='1'; c.classList.add('hovered');
+      setTimeout(()=>onDrawFanCard(pos), 140);
+    });
     fan.appendChild(c);
   });
-}
-
-let dragging=false, hoveredIdx=null, hoveredEl=null;
-fan.addEventListener('pointerdown', e=>{ dragging=true; fan.setPointerCapture(e.pointerId); updateHover(e); });
-fan.addEventListener('pointermove', e=>{ if(dragging) updateHover(e); });
-fan.addEventListener('pointerup', ()=>{ if(!dragging) return; dragging=false;
-  if(hoveredIdx!==null) onDrawFanCard(hoveredIdx); clearHover(); });
-fan.addEventListener('pointercancel', ()=>{dragging=false; clearHover();});
-function updateHover(e){
-  const t=document.elementFromPoint(e.clientX,e.clientY);
-  const cardEl = t&&t.closest?t.closest('.tcard'):null;
-  if(cardEl===hoveredEl) return;
-  clearHover();
-  if(cardEl){
-    cardEl.classList.add('hovered');
-    cardEl.style.setProperty('--lift','-26px');
-    hoveredIdx=parseInt(cardEl.dataset.pos,10);
-    hoveredEl=cardEl;
-  } else { hoveredIdx=null; hoveredEl=null; }
-}
-function clearHover(){
-  [...fan.children].forEach(c=>{c.classList.remove('hovered'); c.style.setProperty('--lift','0px');});
-  hoveredEl=null;
+  // center the row on the middle card for a nicer starting view
+  requestAnimationFrame(()=>{ fan.scrollLeft = (fan.scrollWidth - fan.clientWidth)/2; });
 }
 
 function onDrawFanCard(fanPos){
@@ -1026,7 +1015,7 @@ function showSummary(mode){
 }
 
 function resetToSetup(){
-  setupEl.style.display='flex'; stage.style.display='none';
+  setupEl.style.display='flex'; stage.style.display='flex';
   qBanner.classList.remove('show'); board.classList.remove('show'); board.innerHTML='';
   fanWrap.classList.remove('show'); fan.innerHTML='';
   summaryRow.innerHTML=''; resetRow.innerHTML='';
