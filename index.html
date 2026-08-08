@@ -941,64 +941,70 @@ function highlightWordAt(msgIndex, charIndex){
   }
 }
 
+function splitIntoChunks(text, maxLen){
+  const sentences = text.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [text];
+  const chunks = [];
+  let current = '';
+  for(const s of sentences){
+    if(current && (current+s).length > maxLen){
+      chunks.push(current.trim());
+      current = s;
+    } else {
+      current += s;
+    }
+  }
+  if(current.trim()) chunks.push(current.trim());
+  return chunks.length ? chunks : [text];
+}
+
 function speakMessage(i){
   const m = aiChatHistory[i];
   if(!m) return;
-  if(!('speechSynthesis' in window)){
-    alert('Цей браузер не підтримує озвучення (speechSynthesis недоступний).');
-    return;
-  }
+  if(!('speechSynthesis' in window)) return;
   const clean = speechSanitize(m.content);
   if(!clean) return;
   const synth = window.speechSynthesis;
   const voices = synth.getVoices();
   const ukVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('uk'));
 
-  // Retries with growing delays: on some Android devices the TTS service
-  // needs real time (not milliseconds) to bind on its very first use in a
-  // page session. stages 0-3 keep trying with the uk voice; stage 4 falls
-  // back to the device default voice; after that we finally give up.
+  // Speak in short sentence-sized chunks (long single utterances are a known
+  // failure point on some Android TTS engines) and, on failure, silently
+  // retry with growing delays — the service sometimes needs real time to
+  // bind on its first use in a page session. No popups; if it never works,
+  // it just quietly stops.
+  const chunks = splitIntoChunks(clean, 200);
+  const offsets = [];
+  { let acc=0; chunks.forEach(c=>{ offsets.push(acc); acc += c.length+1; }); }
   const DELAYS = [400, 900, 1800, 3000];
-  const attemptSpeak = (stage)=>{
+
+  const speakChunk = (chunkIdx, stage)=>{
+    if(chunkIdx>=chunks.length){ currentSpeakMsgIndex=null; renderChatUI(false); return; }
     try{
-      const u = new SpeechSynthesisUtterance(clean);
-      if(stage<4){ u.lang = 'uk-UA'; if(ukVoice) u.voice = ukVoice; }
-      u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, e.charIndex); };
-      u.onend = ()=>{ currentSpeakMsgIndex=null; renderChatUI(false); };
-      u.onerror = ev=>{
-        const errName = ev && ev.error;
-        const retryable = errName==='synthesis-failed' || errName==='language-unavailable' || errName==='voice-unavailable' || errName==='synthesis-unavailable';
-        if(retryable && stage<4){
-          setTimeout(()=>attemptSpeak(stage+1), DELAYS[stage]);
-          return;
-        }
-        currentSpeakMsgIndex=null;
-        renderChatUI(false);
-        if(retryable){
-          alert('На цьому пристрої не встановлено голос для української мови (навіть запасний варіант не спрацював).\n\nЩоб виправити: Налаштування телефону → Система → Мова та введення → Синтез мовлення (Text-to-speech) → механізм Google → «Встановити мовні дані» → додай українську.\n\nЯкщо це вже налаштовано — спробуй ще раз натиснути «Озвучити» ще двічі-тричі поспіль: на деяких пристроях рушій «прокидається» лише після кількох реальних спроб.');
-        } else {
-          alert('Помилка озвучення: ' + (errName||'невідома') + '. Спробуй ще раз або перезавантаж сторінку.');
-        }
+      const u = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+      if(stage<4){ u.lang='uk-UA'; if(ukVoice) u.voice=ukVoice; }
+      u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, offsets[chunkIdx]+e.charIndex); };
+      u.onend = ()=> speakChunk(chunkIdx+1, 0);
+      u.onerror = ()=>{
+        if(stage<4){ setTimeout(()=>speakChunk(chunkIdx, stage+1), DELAYS[stage]); return; }
+        currentSpeakMsgIndex=null; renderChatUI(false);
       };
       synth.speak(u);
       setTimeout(()=>{
         if(!synth.speaking && !synth.pending && currentSpeakMsgIndex===i){
-          if(stage<4){ attemptSpeak(stage+1); return; }
+          if(stage<4){ speakChunk(chunkIdx, stage+1); return; }
           currentSpeakMsgIndex=null; renderChatUI(false);
-          alert('Синтезатор мовлення не відповів. Це обмеження цього браузера/пристрою, а не застосунку.');
         }
       }, 2000);
     }catch(e){
-      if(stage<4){ setTimeout(()=>attemptSpeak(stage+1), DELAYS[stage]); return; }
+      if(stage<4){ setTimeout(()=>speakChunk(chunkIdx, stage+1), DELAYS[stage]); return; }
       currentSpeakMsgIndex=null; renderChatUI(false);
-      alert('Не вдалося запустити озвучення: ' + (e && e.message ? e.message : e));
     }
   };
 
   currentSpeakMsgIndex = i;
   renderChatUI(false);
   synth.cancel();
-  setTimeout(()=>attemptSpeak(0), 150);
+  setTimeout(()=>speakChunk(0,0), 150);
 }
 
 function toggleMic(){
