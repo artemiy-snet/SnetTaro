@@ -166,6 +166,7 @@
   .cimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(160deg,#faf6ec,#efe6cf);overflow:hidden;}
   .cimg img{width:100%;height:100%;object-fit:cover;display:block;}
+  .svgfallback{display:none;width:100%;height:100%;align-items:center;justify-content:center;}
   .cardicon{width:80%;height:80%;color:var(--icol,#4a3f6b);}
   .cardicon .iframe{fill:none;stroke:var(--icol,#4a3f6b);stroke-width:1.4;opacity:.28;}
   .cardicon path,.cardicon line,.cardicon circle:not(.iframe){fill:none;stroke:currentColor;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;}
@@ -380,6 +381,7 @@ const SUITS = {
  pentacles:{name:'Пентаклі',elem:'Земля',domain:'матеріального світу, роботи й тіла',gl:'🪙',icon:'pentacle',color:'#7c8c3e'},
 };
 const MAJOR_ICONS = ['cliff','infinity','moon','union','ram','key','union','wheel','infinity','lantern','wheel','scale','figure','phoenix','chalice','ram','tower','star','moon','sun','trumpet','wreath'];
+const MAJOR_SLUGS = ['fool','magician','high-priestess','empress','emperor','hierophant','lovers','chariot','strength','hermit','wheel-of-fortune','justice','hanged-man','death','temperance','devil','tower','star','moon','sun','judgement','world'];
 const MAJOR_COLOR = '#4a3f6b';
 
 function raysSVG(n, r1, r2, cx, cy){
@@ -416,12 +418,66 @@ const ICONS = {
 function svgIcon(key){
   return `<svg viewBox="0 0 100 100" class="cardicon"><circle class="iframe" cx="50" cy="50" r="46"/>${ICONS[key]||''}</svg>`;
 }
-const customImages = {}; // deckIdx -> dataURL, session-only
+const customImages = {}; // deckIdx -> dataURL, persisted in IndexedDB on this device
+
+/* ---- persistent storage (IndexedDB) so custom card images survive reloads ---- */
+const IDB_NAME='snettaro-db', IDB_VERSION=1, IDB_STORE='customImages';
+let idbPromise=null;
+function openIDB(){
+  if(idbPromise) return idbPromise;
+  idbPromise = new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){ reject(new Error('no indexeddb')); return; }
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+  return idbPromise;
+}
+async function idbSet(key, value){
+  try{
+    const db = await openIDB();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).put(value, String(key));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){ /* storage unavailable, image stays session-only */ }
+}
+async function idbDelete(key){
+  try{
+    const db = await openIDB();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).delete(String(key));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){}
+}
+async function idbLoadAll(){
+  try{
+    const db = await openIDB();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_STORE,'readonly');
+      const store=tx.objectStore(IDB_STORE);
+      const out={};
+      const req=store.openCursor();
+      req.onsuccess=e=>{
+        const cur=e.target.result;
+        if(cur){ out[cur.key]=cur.value; cur.continue(); } else res(out);
+      };
+      req.onerror=()=>rej(req.error);
+    });
+  }catch(e){ return {}; }
+}
 function cardVisualHTML(c, deckIdx){
   if(deckIdx!=null && customImages[deckIdx]){
     return `<div class="cimg"><img src="${customImages[deckIdx]}" alt="${c.name}"></div>`;
   }
-  return `<div class="cimg" style="--icol:${c.iconColor}">${svgIcon(c.iconKey)}</div>`;
+  return `<div class="cimg" style="--icol:${c.iconColor}">
+    <img src="cards/${c.folderFile}" alt="${c.name}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <div class="svgfallback">${svgIcon(c.iconKey)}</div>
+  </div>`;
 }
 function loadImageAsDataURL(file, maxDim, cb){
   const reader = new FileReader();
@@ -465,14 +521,14 @@ function buildMinors(){
         img:`Карта масті «${s.name}» (${s.elem}), повʼязана зі сферою ${s.domain}.`,
         up:r.up(s.domain), rev:r.rev(s.domain),
         kw:[s.name.toLowerCase(), s.elem.toLowerCase(), r.label.toLowerCase(), 'архетип', 'самоаналіз'],
-        iconKey:s.icon, iconColor:s.color
+        iconKey:s.icon, iconColor:s.color, folderFile:`${key}-${String(i+1).padStart(2,'0')}.jpg`
       });
     });
   }
   return out;
 }
 const DECK = [
-  ...MAJOR.map((c,i)=>({arcana:'major', n:c.n, name:c.name, elem:c.elem, gl:c.gl, img:c.img, up:c.up, rev:c.rev, kw:c.kw, iconKey:MAJOR_ICONS[i], iconColor:MAJOR_COLOR})),
+  ...MAJOR.map((c,i)=>({arcana:'major', n:c.n, name:c.name, elem:c.elem, gl:c.gl, img:c.img, up:c.up, rev:c.rev, kw:c.kw, iconKey:MAJOR_ICONS[i], iconColor:MAJOR_COLOR, folderFile:`major-${String(i).padStart(2,'0')}-${MAJOR_SLUGS[i]}.jpg`})),
   ...buildMinors()
 ];
 
@@ -518,6 +574,7 @@ customImgInput.addEventListener('change', e=>{
   if(!file || pendingUploadDeckIdx===null) return;
   loadImageAsDataURL(file, 640, dataURL=>{
     customImages[pendingUploadDeckIdx]=dataURL;
+    idbSet(pendingUploadDeckIdx, dataURL);
     if(pendingUploadRefresh) pendingUploadRefresh();
     if(board.classList.contains('show')) renderBoard();
   });
@@ -545,7 +602,7 @@ function openDeckCustomizer(filter){
   detail.innerHTML = `
     <div class="dpos">Оформлення колоди</div>
     <h2 style="font-family:var(--serif);margin:6px 0 8px;">Завантаж власні зображення</h2>
-    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки — заміниш її символ своїм фото чи малюнком (це діє лише в цій сесії, не зберігається після перезавантаження).</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки — заміниш її символ своїм фото чи малюнком. Зображення зберігаються на цьому пристрої й залишаться навіть після закриття застосунку.</p>
     <div class="spread-row" id="dgTabs" style="margin-bottom:10px;">${tabsHTML}</div>
     <div class="deckgrid">${gridHTML}</div>
     <div class="dactions"><button class="dclose" id="btnCloseDG">Закрити</button></div>
@@ -557,7 +614,9 @@ function openDeckCustomizer(filter){
   detail.querySelectorAll('[data-reset]').forEach(btn=>{
     btn.addEventListener('click', ev=>{
       ev.stopPropagation();
-      delete customImages[parseInt(btn.dataset.reset,10)];
+      const idx = parseInt(btn.dataset.reset,10);
+      delete customImages[idx];
+      idbDelete(idx);
       openDeckCustomizer(filter);
       if(board.classList.contains('show')) renderBoard();
     });
@@ -777,7 +836,7 @@ function openDetail(nodeId, isFreshDraw){
     customImgInput.click();
   });
   const rib=el('btnResetImg'); if(rib) rib.addEventListener('click', ()=>{
-    delete customImages[node.deckIdx]; openDetail(nodeId,false); renderBoard();
+    delete customImages[node.deckIdx]; idbDelete(node.deckIdx); openDetail(nodeId,false); renderBoard();
   });
   const nb=el('btnNext'); if(nb) nb.addEventListener('click', ()=>{closeIt(); renderFanLabel();});
   const cb=el('btnClose'); if(cb) cb.addEventListener('click', closeIt);
@@ -959,6 +1018,11 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   });
 }
+
+idbLoadAll().then(saved=>{
+  Object.keys(saved).forEach(k=>{ customImages[k]=saved[k]; });
+  if(board.classList.contains('show')) renderBoard();
+}).catch(()=>{});
 </script>
 </body>
 </html>
