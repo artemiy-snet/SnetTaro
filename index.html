@@ -796,17 +796,27 @@ function buildAIPrompt(mn){
   const lines = mn.map(n=>{
     const c=DECK[n.deckIdx];
     const meaning = n.reversed?c.rev:c.up;
-    return `${positionsConfig[n.posIndex].label}: ${c.name}${n.reversed?' (перевернута)':''} — ${meaning}${n.note?` [особиста нотатка людини: ${n.note}]`:''}`;
+    let block = `${positionsConfig[n.posIndex].label}: ${c.name}${n.reversed?' (перевернута)':''} — ${meaning}${n.note?` [особиста нотатка людини: ${n.note}]`:''}`;
+    const desc = allDescendants(n.id);
+    if(desc.length){
+      block += '\n' + desc.map(d=>{
+        const dc=DECK[d.deckIdx];
+        const dm=d.reversed?dc.rev:dc.up;
+        return `   ↳ Уточнення до «${c.name}»: ${dc.name}${d.reversed?' (перевернута)':''} — ${dm}`;
+      }).join('\n');
+    }
+    return block;
   }).join('\n');
   return `Ти — досвідчений, психологічно грамотний таролог-скептик, який працює в архетипній, а не містичній рамці.
 Розклад: ${spreadLabel}.
 ${question?`Питання людини: «${question}»`:'Питання не вказане — загальний огляд.'}
-Карти в позиціях:
+Карти в позиціях (рядки з "↳ Уточнення" — це додаткові карти, які людина витягнула, щоб глибше розкрити відповідну позицію; обов'язково врахуй їх у своєму аналізі й прямо посилайся на них там, де вони уточнюють чи змінюють прочитання основної карти):
 ${lines}
 
 Напиши глибокий, зв'язний розбір цього розкладу українською мовою — так, як це робить досвідчений практик: не перелік значень по черзі, а справжній аналіз взаємодій. Обов'язково відзнач:
 — структурні патерни (наприклад, чи згруповані перевернуті карти в певній частині розкладу; чи повторюється якась масть чи число в ключових позиціях);
 — як карти логічно продовжують чи суперечать одна одній від позиції до позиції;
+— як уточнюючі карти (якщо вони є) розкривають чи змінюють значення основної карти в тій позиції;
 — один цілісний сюжет наприкінці, що пов'язує все докупи.
 Тримайся психологічної, архетипної рамки (інструмент самоаналізу, а не пророцтво), без містичної патетики. Пиши природною українською, розбий на змістовні абзаци з короткими підзаголовками там, де це природно. Далі людина зможе ставити тобі уточнювальні питання про цей розклад — відповідай так само по суті, спираючись на ці самі карти.`;
 }
@@ -1133,6 +1143,11 @@ function doShuffle(){
 /* ---- board rendering ---- */
 function mainNodes(){ return nodes.filter(n=>n.parentId===null); }
 function childrenOf(id){ return nodes.filter(n=>n.parentId===id); }
+function allDescendants(id){
+  let result=[];
+  childrenOf(id).forEach(d=>{ result.push(d); result=result.concat(allDescendants(d.id)); });
+  return result;
+}
 
 function slotHTML(idx, extraClass){
   const mn = mainNodes().find(n=>n.posIndex===idx);
@@ -1141,7 +1156,7 @@ function slotHTML(idx, extraClass){
   wrap.className='board-slot '+(extraClass||'');
   if(mn){
     const c=DECK[mn.deckIdx];
-    const kids=childrenOf(mn.id).length;
+    const kids=allDescendants(mn.id).length;
     wrap.innerHTML=`<div class="mini-card" data-open="${mn.id}">
       ${kids?`<div class="badge">+${kids}</div>`:''}
       <div class="mc-img">${cardVisualHTML(c, mn.deckIdx)}</div>
@@ -1368,7 +1383,7 @@ function showSummary(mode){
   if(mode==='structured'){
     const rows = mn.map(n=>{
       const c=DECK[n.deckIdx];
-      const kids=childrenOf(n.id);
+      const kids=allDescendants(n.id);
       const meaning = n.reversed ? c.rev : c.up;
       const altMeaning = n.reversed ? c.altRev : c.altUp;
       return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e6ddc4;">
