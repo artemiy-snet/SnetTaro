@@ -180,8 +180,17 @@
   .cardicon path,.cardicon line,.cardicon circle:not(.iframe){fill:none;stroke:currentColor;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;}
   .dbigimg{width:100%;display:flex;justify-content:center;margin:4px 0 14px;}
   .dbigimg .cimg{width:190px;height:270px;border-radius:10px;border:2px solid var(--gold);
-    box-shadow:0 10px 26px rgba(0,0,0,.28);}
+    box-shadow:0 10px 26px rgba(0,0,0,.28);cursor:zoom-in;}
   .dbigimg.flip .cimg{transform:rotate(180deg);}
+
+  #imgFullscreen{position:fixed;inset:0;background:rgba(5,4,10,.96);z-index:60;display:none;
+    align-items:center;justify-content:center;padding:24px;}
+  #imgFullscreen.show{display:flex;}
+  #imgFullscreen .fscontent{width:min(92vw,520px);aspect-ratio:0.68;border-radius:14px;overflow:hidden;
+    box-shadow:0 20px 50px rgba(0,0,0,.6);border:2px solid var(--gold);}
+  #imgFullscreen .fscontent .cimg{width:100%;height:100%;}
+  #imgFullscreen .fscontent .cimg img{object-fit:contain;background:#0d0a17;}
+  #imgFullscreen .fshint{position:absolute;bottom:28px;left:0;right:0;text-align:center;color:#9d95b5;font-size:11px;}
 
   .deckgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px;}
   .dgcell{aspect-ratio:0.68;border-radius:7px;overflow:hidden;position:relative;cursor:pointer;
@@ -271,6 +280,7 @@
 </div>
 
 <div id="overlay"><div id="detail"></div></div>
+<div id="imgFullscreen"><div class="fscontent"></div><div class="fshint">Торкнись, щоб закрити</div></div>
 <input type="file" id="customImgInput" accept="image/*" style="display:none;">
 
 <script>
@@ -534,6 +544,12 @@ function cardVisualHTML(c, deckIdx){
     <div class="svgfallback">${svgIcon(c.iconKey)}</div>
   </div>`;
 }
+const imgFullscreenEl = document.getElementById('imgFullscreen');
+function openImageFullscreen(c, deckIdx){
+  imgFullscreenEl.querySelector('.fscontent').innerHTML = cardVisualHTML(c, deckIdx);
+  imgFullscreenEl.classList.add('show');
+}
+imgFullscreenEl.addEventListener('click', ()=> imgFullscreenEl.classList.remove('show'));
 function loadImageAsDataURL(file, maxDim, cb){
   const reader = new FileReader();
   reader.onload = e=>{
@@ -1112,6 +1128,7 @@ function openCardInfo(navList, navIdx){
     <div class="dactions"><button class="dclose" id="btnCloseCardInfo">Закрити</button></div>
   `;
   overlay.classList.add('show');
+  const dbi=detail.querySelector('.dbigimg'); if(dbi) dbi.addEventListener('click', ()=>openImageFullscreen(c, deckIdx));
   const pb=el('btnPrevCard'); if(pb) pb.addEventListener('click', ()=>{ if(navIdx>0) openCardInfo(navList, navIdx-1); });
   const nb=el('btnNextCard'); if(nb) nb.addEventListener('click', ()=>{ if(navIdx<navList.length-1) openCardInfo(navList, navIdx+1); });
   el('btnCloseCardInfo').addEventListener('click', ()=>overlay.classList.remove('show'));
@@ -1379,6 +1396,7 @@ function openDetail(nodeId, isFreshDraw){
   `;
   overlay.classList.add('show');
   const nBox=el('noteBox'); nBox.addEventListener('input', ()=>{ node.note=nBox.value; });
+  const dbi2=detail.querySelector('.dbigimg'); if(dbi2) dbi2.addEventListener('click', ()=>openImageFullscreen(c, node.deckIdx));
   detail.querySelectorAll('.clarChip').forEach(chip=>{
     chip.addEventListener('click', ()=>openDetail(parseInt(chip.dataset.open,10), false));
   });
