@@ -902,6 +902,7 @@ function speakText(text){
 let aiChatHistory = [];
 
 let currentSpeakMsgIndex = null;
+let ttsCancelledByUser = false;
 
 function wrapWordsForHighlight(text){
   let out = '';
@@ -923,7 +924,10 @@ function renderChatUI(loading){
       <div style="max-width:85%;">
         <div class="msgbubble" data-msg="${i}" style="padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;
           background:${isUser?'var(--ink)':'#efe6cf'};color:${isUser?'var(--parchment)':'var(--ink)'};">${bodyHTML}</div>
-        ${!isUser?`<button class="speakBtn" data-i="${i}" style="margin-top:4px;background:none;border:1px solid var(--gold-dim);color:var(--gold-dim);font-size:11px;border-radius:10px;padding:4px 9px;cursor:pointer;">${isReading?'⏸ Читає…':'🔊 Озвучити'}</button>`:''}
+        ${!isUser?`<div style="display:flex;gap:6px;margin-top:4px;">
+          <button class="speakBtn" data-i="${i}" style="background:none;border:1px solid var(--gold-dim);color:var(--gold-dim);font-size:11px;border-radius:10px;padding:4px 9px;cursor:pointer;">${isReading?'⏸ Читає…':'🔊 Озвучити'}</button>
+          <button class="copyBtn" data-i="${i}" style="background:none;border:1px solid var(--gold-dim);color:var(--gold-dim);font-size:11px;border-radius:10px;padding:4px 9px;cursor:pointer;">📋 Копіювати</button>
+        </div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -946,8 +950,24 @@ function renderChatUI(loading){
   detail.querySelectorAll('.speakBtn').forEach(b=>{
     b.addEventListener('click', ()=>{
       const i = parseInt(b.dataset.i,10);
-      if(currentSpeakMsgIndex===i){ window.speechSynthesis.cancel(); currentSpeakMsgIndex=null; renderChatUI(false); }
+      if(currentSpeakMsgIndex===i){ ttsCancelledByUser=true; window.speechSynthesis.cancel(); currentSpeakMsgIndex=null; renderChatUI(false); }
       else speakMessage(i);
+    });
+  });
+  detail.querySelectorAll('.copyBtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const i = parseInt(b.dataset.i,10);
+      const text = aiChatHistory[i] ? aiChatHistory[i].content : '';
+      const done = ()=>{ b.textContent='✓ Скопійовано'; setTimeout(()=>{ b.textContent='📋 Копіювати'; }, 1500); };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done).catch(()=>{
+          const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+          ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done();
+        });
+      } else {
+        const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+        ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done();
+      }
     });
   });
   el('btnChatSend').addEventListener('click', sendChatFromInput);
@@ -1017,23 +1037,27 @@ function speakMessage(i){
       u.onboundary = e=>{ if(typeof e.charIndex==='number') highlightWordAt(i, offsets[chunkIdx]+e.charIndex); };
       u.onend = ()=> speakChunk(chunkIdx+1, 0);
       u.onerror = ()=>{
+        if(ttsCancelledByUser || currentSpeakMsgIndex!==i){ ttsCancelledByUser=false; return; }
         if(stage<4){ setTimeout(()=>speakChunk(chunkIdx, stage+1), DELAYS[stage]); return; }
         currentSpeakMsgIndex=null; renderChatUI(false);
       };
       synth.speak(u);
       setTimeout(()=>{
-        if(!synth.speaking && !synth.pending && currentSpeakMsgIndex===i){
+        if(ttsCancelledByUser || currentSpeakMsgIndex!==i) return;
+        if(!synth.speaking && !synth.pending){
           if(stage<4){ speakChunk(chunkIdx, stage+1); return; }
           currentSpeakMsgIndex=null; renderChatUI(false);
         }
       }, 2000);
     }catch(e){
+      if(ttsCancelledByUser || currentSpeakMsgIndex!==i){ ttsCancelledByUser=false; return; }
       if(stage<4){ setTimeout(()=>speakChunk(chunkIdx, stage+1), DELAYS[stage]); return; }
       currentSpeakMsgIndex=null; renderChatUI(false);
     }
   };
 
   currentSpeakMsgIndex = i;
+  ttsCancelledByUser = false;
   renderChatUI(false);
   synth.cancel();
   setTimeout(()=>speakChunk(0,0), 150);
