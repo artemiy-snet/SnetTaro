@@ -30,22 +30,13 @@
       var(--bg); min-height:100vh;}
   #app{max-width:540px;margin:0 auto;padding:18px 16px 44px;position:relative;min-height:100vh;isolation:isolate;}
 
-  header{text-align:center;position:relative;margin-bottom:4px;padding-top:38px;}
+  header{text-align:center;position:relative;margin-bottom:4px;}
   header .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);}
   header h1{font-family:var(--serif);font-weight:600;font-size:26px;margin:4px 0 2px;color:var(--parchment);}
   header p.sub{font-size:12px;color:#9d95b5;margin:0;line-height:1.5;}
-  #histBtn{
-    position:absolute;right:0;top:2px;background:none;border:1px solid #362c52;color:#b8afd0;
-    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
-  }
-  #deckCustomBtn{
-    position:absolute;left:0;top:2px;background:none;border:1px solid #362c52;color:#b8afd0;
-    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
-  }
-  #aiSettingsBtn{
-    position:absolute;left:50%;top:2px;transform:translateX(-50%);background:none;border:1px solid #4a3f6b;color:var(--gold-dim);
-    border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;
-  }
+  .hdrRow{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+  .hdrBtn{background:none;border:1px solid #362c52;color:#b8afd0;border-radius:16px;font-size:11px;padding:6px 11px;cursor:pointer;}
+  .hdrBtn.hdrBtnAccent{border-color:#4a3f6b;color:var(--gold-dim);}
   .divider{width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:14px auto 16px;}
 
   /* ---- setup ---- */
@@ -61,6 +52,16 @@
     padding:8px 14px;cursor:pointer;transition:.2s;
   }
   .choice-btn.active{background:var(--gold);color:#231b0e;border-color:var(--gold);font-weight:600;}
+  #shuffleIntensityBox{
+    width:100%;max-width:420px;background:var(--panel);border:1px solid #362c52;border-radius:14px;
+    padding:12px 16px 14px;
+  }
+  .siLabel{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-dim);text-align:center;margin-bottom:8px;}
+  .siRow{display:flex;align-items:center;gap:10px;}
+  .siEdge{color:#726a8c;font-size:11px;}
+  .siCount{color:var(--gold);font-weight:700;font-family:var(--serif);font-size:15px;min-width:16px;text-align:center;}
+  #shuffleIntensity{flex:1;accent-color:var(--gold);}
+  .siMsg{text-align:center;color:#9d95b5;font-size:11px;margin-top:5px;}
   .primary-btn{
     font-family:var(--serif);font-size:16px;letter-spacing:.03em;background:linear-gradient(180deg,#d8b563,var(--gold));
     color:#231b0e;border:none;border-radius:8px;padding:13px 30px;cursor:pointer;
@@ -134,6 +135,12 @@
   #fanWrap.show{display:flex;}
   #fanLabel{font-family:var(--serif);font-size:14px;color:var(--gold);margin-bottom:2px;text-align:center;min-height:36px;padding:0 16px;}
   #fanHint{font-size:11px;color:#8d84a8;margin-bottom:6px;text-align:center;}
+  #reshuffleBtn{
+    display:block;margin:10px auto 0;background:none;border:1px solid #362c52;color:#b8afd0;
+    border-radius:16px;font-size:11.5px;padding:7px 14px;cursor:pointer;
+  }
+  #fan.reshuffling{animation:reshuffleFlash .5s ease;}
+  @keyframes reshuffleFlash{0%,100%{filter:none;}50%{filter:brightness(1.4);}}
   #fan{
     width:100%;
     height:clamp(150px, 32vw, 210px);
@@ -234,9 +241,12 @@
 <body>
 <div id="app">
   <header>
-    <button id="histBtn">Історія</button>
-    <button id="deckCustomBtn">Колода</button>
-    <button id="aiSettingsBtn">ШІ</button>
+    <div class="hdrRow">
+      <button id="deckCustomBtn" class="hdrBtn">Колода</button>
+      <button id="userProfileBtn" class="hdrBtn">Ти</button>
+      <button id="aiSettingsBtn" class="hdrBtn hdrBtnAccent">ШІ</button>
+      <button id="histBtn" class="hdrBtn">Історія</button>
+    </div>
     <h1>SnetTaro</h1>
     <p class="sub">Сформулюй питання, обери розклад, перетасуй колоду —<br>і потягни пальцем по віялу, щоб витягнути карту.</p>
   </header>
@@ -255,6 +265,16 @@
       <button class="choice-btn" data-spread="7-horseshoe">7 карт — Підкова</button>
       <button class="choice-btn" data-spread="10">10 карт — Кельтський хрест</button>
     </div>
+    <div id="shuffleIntensityBox">
+      <div class="siLabel">Інтенсивність тасування</div>
+      <div class="siRow">
+        <span class="siEdge">1</span>
+        <input type="range" id="shuffleIntensity" min="1" max="7" value="3">
+        <span class="siEdge">7</span>
+        <span class="siCount" id="shuffleCount">3</span>
+      </div>
+      <div class="siMsg" id="readinessMsg">Стандартне тасування</div>
+    </div>
     <button class="primary-btn" id="shuffleBtn">Перетасувати колоду</button>
     <button class="ghost-btn" id="browseDeckBtn">📖 Роздивитись колоду</button>
   </div>
@@ -271,6 +291,7 @@
     <div id="fanLabel"></div>
     <div id="fanHint">Прокрути ряд і торкнись картки, щоб витягнути</div>
     <div id="fan"></div>
+    <button id="reshuffleBtn">🔀 Перетасувати ще раз</button>
   </div>
 
   <div id="summaryRow"></div>
@@ -717,7 +738,16 @@ let history=[];
 const el=id=>document.getElementById(id);
 const setupEl=el('setup'), stage=el('stage'), deckStack=el('deckStack'), shuffleBtn=el('shuffleBtn');
 const qInput=el('qInput'), spreadRow=el('spreadRow'), qBanner=el('qBanner');
+const shuffleIntensityEl=el('shuffleIntensity'), shuffleCountEl=el('shuffleCount'), readinessMsgEl=el('readinessMsg');
+const SHUFFLE_MSGS={1:'Швидке рішення',2:'Базове перемішування',3:'Стандартне тасування',4:'Впевнене перемішування',5:'Глибоке тасування',6:'Ретельно, майже медитативно',7:'Повне занурення'};
+shuffleIntensityEl.addEventListener('input', ()=>{
+  const v=shuffleIntensityEl.value;
+  shuffleCountEl.textContent=v;
+  readinessMsgEl.textContent=SHUFFLE_MSGS[v]||'';
+});
 const board=el('board'), fanWrap=el('fanWrap'), fan=el('fan'), fanLabel=el('fanLabel');
+const reshuffleBtnEl=el('reshuffleBtn');
+reshuffleBtnEl.addEventListener('click', reshuffleRemaining);
 const overlay=el('overlay'), detail=el('detail');
 const resetRow=el('resetRow'), summaryRow=el('summaryRow');
 const histBtn=el('histBtn'), histPanel=el('histPanel');
@@ -742,6 +772,8 @@ deckCustomBtn.addEventListener('click', ()=>openDeckCustomizer('all'));
 const browseDeckBtn=el('browseDeckBtn');
 if(browseDeckBtn) browseDeckBtn.addEventListener('click', ()=>openDeckBrowser('all'));
 aiSettingsBtn.addEventListener('click', ()=>openAISettings());
+const userProfileBtn=el('userProfileBtn');
+userProfileBtn.addEventListener('click', ()=>openUserProfile());
 
 /* ---- AI-powered deep reading: user's own Anthropic API key, called directly
    from the browser (Anthropic supports this via the anthropic-dangerous-direct-
@@ -749,9 +781,127 @@ aiSettingsBtn.addEventListener('click', ()=>openAISettings());
    never leaves this device except in the direct request to Anthropic itself. */
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* ---- profile: numerology + zodiac (offline, local only) ---- */
+const LETTER_MAP = {а:1,б:2,в:3,г:4,ґ:5,д:6,е:7,є:8,ж:9,з:1,и:2,і:3,ї:4,й:5,
+  к:6,л:7,м:8,н:9,о:1,п:2,р:3,с:4,т:5,у:6,ф:7,х:8,ц:9,ч:1,ш:2,щ:3,ь:0,ю:4,я:5};
+function reduceNumber(n){
+  while(n > 9 && n !== 11 && n !== 22){ n = String(n).split('').reduce((a,d)=>a+Number(d),0); }
+  return n;
+}
+function nameNumber(name){
+  const clean = (name||'').toLowerCase().replace(/[^а-щьюяєіїґ]/g,'');
+  if(!clean) return null;
+  let sum = 0;
+  for(const ch of clean) sum += LETTER_MAP[ch] || 0;
+  return reduceNumber(sum);
+}
+function birthNumber(dateStr){
+  if(!dateStr) return null;
+  const digits = dateStr.replace(/-/g,'');
+  return reduceNumber(digits.split('').reduce((a,d)=>a+Number(d),0));
+}
+const NUMBER_MEANINGS = {
+  1:'лідерство, початок, самостійність', 2:'партнерство, чутливість, баланс',
+  3:'творчість, вираження, спілкування', 4:'стабільність, праця, структура',
+  5:'свобода, зміни, рух', 6:'турбота, відповідальність, гармонія',
+  7:'аналіз, інтроспекція, пошук', 8:'амбіції, матеріальний результат',
+  9:'завершення циклу, мудрість', 11:'майстер-число: інтуїція, натхнення',
+  22:'майстер-число: масштабне будівництво'
+};
+const ZODIAC = [
+  {name:'Овен', short:'♈', dates:'21.03–19.04', element:'Вогонь', ruler:'Марс', text:'Діє швидше, ніж думає — сила у початку нового.', from:[3,21], to:[4,19]},
+  {name:'Телець', short:'♉', dates:'20.04–20.05', element:'Земля', ruler:'Венера', text:'Цінує стабільність і відчутний результат.', from:[4,20], to:[5,20]},
+  {name:'Близнюки', short:'♊', dates:'21.05–20.06', element:'Повітря', ruler:'Меркурій', text:'Швидкий розум, ненаситна цікавість.', from:[5,21], to:[6,20]},
+  {name:'Рак', short:'♋', dates:'21.06–22.07', element:'Вода', ruler:'Місяць', text:'Відчуває глибше, ніж говорить.', from:[6,21], to:[7,22]},
+  {name:'Лев', short:'♌', dates:'23.07–22.08', element:'Вогонь', ruler:'Сонце', text:'Потребує визнання, щоб щиро світити.', from:[7,23], to:[8,22]},
+  {name:'Діва', short:'♍', dates:'23.08–22.09', element:'Земля', ruler:'Меркурій', text:'Бачить деталі, які інші пропускають.', from:[8,23], to:[9,22]},
+  {name:'Терези', short:'♎', dates:'23.09–22.10', element:'Повітря', ruler:'Венера', text:'Шукає баланс, іноді ціною рішення.', from:[9,23], to:[10,22]},
+  {name:'Скорпіон', short:'♏', dates:'23.10–21.11', element:'Вода', ruler:'Плутон', text:'Все або нічого — йде углиб будь-чого.', from:[10,23], to:[11,21]},
+  {name:'Стрілець', short:'♐', dates:'22.11–21.12', element:'Вогонь', ruler:'Юпітер', text:'Горизонт цікавіший за досягнуте.', from:[11,22], to:[12,21]},
+  {name:'Козеріг', short:'♑', dates:'22.12–19.01', element:'Земля', ruler:'Сатурн', text:'Терпіння і дисципліна — головна зброя.', from:[12,22], to:[1,19]},
+  {name:'Водолій', short:'♒', dates:'20.01–18.02', element:'Повітря', ruler:'Уран', text:'Мислить нестандартно, іноді почувається інакшим.', from:[1,20], to:[2,18]},
+  {name:'Риби', short:'♓', dates:'19.02–20.03', element:'Вода', ruler:'Нептун', text:'Тонка межа між своїми й чужими емоціями.', from:[2,19], to:[3,20]},
+];
+function zodiacFromDate(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d)) return null;
+  const m = d.getMonth()+1, day = d.getDate();
+  return ZODIAC.find(z=>{
+    const [fm,fd]=z.from, [tm,td]=z.to;
+    if(fm<=tm) return (m>fm || (m===fm && day>=fd)) && (m<tm || (m===tm && day<=td));
+    return (m===fm && day>=fd) || (m===tm && day<=td) || (m>fm || m<tm);
+  }) || null;
+}
+
+let userProfile = {name:'', birth:'', zodiacKey:''};
+function openUserProfile(){
+  Promise.all([idbGetSetting('userName'), idbGetSetting('userBirth'), idbGetSetting('userZodiac')]).then(([name,birth,zodiacKey])=>{
+    userProfile = {name:name||'', birth:birth||'', zodiacKey:zodiacKey||''};
+    renderUserProfile();
+  });
+}
+function renderUserProfile(){
+  const nn = nameNumber(userProfile.name);
+  const bn = birthNumber(userProfile.birth);
+  const autoZ = zodiacFromDate(userProfile.birth);
+  const activeZodiacKey = userProfile.zodiacKey || (autoZ ? autoZ.name : '');
+  let numHTML = '';
+  if(!nn && !bn) numHTML = `<p style="color:var(--ink-soft);font-size:12.5px;">Введи ім'я або дату народження, щоб побачити число.</p>`;
+  else {
+    if(nn) numHTML += `<p style="margin-bottom:6px;"><strong>Число імені: ${nn}</strong> — ${NUMBER_MEANINGS[nn]}</p>`;
+    if(bn) numHTML += `<p><strong>Число долі: ${bn}</strong> — ${NUMBER_MEANINGS[bn]}</p>`;
+  }
+  const zodiacGridHTML = ZODIAC.map(z=>`<button class="choice-btn zchip ${z.name===activeZodiacKey?'active':''}" data-z="${z.name}" style="min-width:56px;">${z.short}<br>${z.name}</button>`).join('');
+  const activeZ = ZODIAC.find(z=>z.name===activeZodiacKey);
+  detail.innerHTML = `
+    <div class="dpos">Профіль</div>
+    <h2 style="font-family:var(--serif);margin:6px 0 10px;">Про тебе</h2>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;">Ці дані лишаються лише на цьому пристрої й, за бажанням, додаються до контексту ШІ-аналізу — знак і числа нумерології.</p>
+    <h4>Ім'я</h4>
+    <input type="text" id="profNameInput" placeholder="Твоє ім'я" value="${userProfile.name.replace(/"/g,'&quot;')}"
+      style="width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:10px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;box-sizing:border-box;">
+    <h4>Дата народження (необов'язково)</h4>
+    <input type="date" id="profBirthInput" value="${userProfile.birth}"
+      style="width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:10px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;box-sizing:border-box;">
+    <div style="margin-top:12px;">${numHTML}</div>
+    <h4>Знак зодіаку${autoZ?' (визначено з дати)':''}</h4>
+    <div class="spread-row" id="zodiacGrid" style="margin-bottom:10px;">${zodiacGridHTML}</div>
+    <div style="font-size:12.5px;line-height:1.5;min-height:20px;">${activeZ?`<strong>${activeZ.name} ${activeZ.short}</strong> · ${activeZ.dates}<br>Стихія ${activeZ.element} · керує ${activeZ.ruler}<br>${activeZ.text}`:''}</div>
+    <div class="dactions">
+      <button class="dclose" id="btnSaveProfile">Зберегти</button>
+      <button class="dclar" id="btnCloseProfile">Закрити</button>
+    </div>
+  `;
+  overlay.classList.add('show');
+  el('profNameInput').addEventListener('input', e=>{ userProfile.name=e.target.value; renderUserProfile(); });
+  el('profBirthInput').addEventListener('input', e=>{ userProfile.birth=e.target.value; userProfile.zodiacKey=''; renderUserProfile(); });
+  detail.querySelectorAll('.zchip').forEach(b=>{
+    b.addEventListener('click', ()=>{ userProfile.zodiacKey=b.dataset.z; renderUserProfile(); });
+  });
+  el('btnSaveProfile').addEventListener('click', ()=>{
+    idbSetSetting('userName', userProfile.name);
+    idbSetSetting('userBirth', userProfile.birth);
+    idbSetSetting('userZodiac', userProfile.zodiacKey || (zodiacFromDate(userProfile.birth)||{}).name || '');
+    overlay.classList.remove('show');
+  });
+  el('btnCloseProfile').addEventListener('click', ()=>overlay.classList.remove('show'));
+}
+
+const AI_MODES = {
+  default:{emoji:'🔮',label:'Класичний',flavor:`Ти — досвідчена, мудра ворожка-тарологиня зі своїм голосом і манерою мовлення: трохи загадкова, дуже уважна до деталей, говорить образно й живо, наче оповідає історію біля свічки, а не читає довідник.`},
+  child:{emoji:'👶',label:'Дитячий',flavor:`Ти — добра казкарка для дитини чи підлітка. Говориш просто, тепло, образами з казок. Уникаєш страшних і дорослих тем. Завжди залишаєш відчуття підтримки.`},
+  romantic:{emoji:'💕',label:'Ніжний',flavor:`Ти — ніжна, поетична ворожка. М'які образи, тепла мова почуттів, без порожньої солодкавості.`},
+  brutal:{emoji:'🖤',label:'Брутальний',flavor:`Ти — груба, дотепна ворожка з чорним гумором, вживаєш нецензурну лексику органічно й доречно. Ріжеш правду з любов'ю під грубістю. Ніколи не ображаєш людину особисто.`},
+  witch:{emoji:'😱',label:'Відьомський',flavor:`Ти — похмура драматична відьма, стилістика прокльонів і темної атмосфери — це театральна форма, а не справжні погрози чи прогнози нещастя.`},
+};
 function openAISettings(){
-  Promise.all([idbGetSetting('apiKey'), idbGetSetting('model')]).then(([key, model])=>{
+  Promise.all([idbGetSetting('apiKey'), idbGetSetting('model'), idbGetSetting('aiMode')]).then(([key, model, aiMode])=>{
     model = model || 'claude-haiku-4-5-20251001';
+    aiMode = aiMode || 'default';
+    const modeGridHTML = Object.entries(AI_MODES).map(([k,m])=>
+      `<button class="choice-btn mchip ${k===aiMode?'active':''}" data-mode="${k}">${m.emoji} ${m.label}</button>`
+    ).join('');
     detail.innerHTML = `
       <div class="dpos">Налаштування</div>
       <h2 style="font-family:var(--serif);margin:6px 0 10px;">Власний ключ Anthropic</h2>
@@ -767,6 +917,8 @@ function openAISettings(){
         <option value="claude-haiku-4-5-20251001" ${model==='claude-haiku-4-5-20251001'?'selected':''}>Швидко й дешево (Haiku)</option>
         <option value="claude-sonnet-5" ${model==='claude-sonnet-5'?'selected':''}>Глибше й якісніше (Sonnet)</option>
       </select>
+      <h4>Голос тлумачення</h4>
+      <div class="spread-row" id="modeGrid" style="margin-bottom:6px;">${modeGridHTML}</div>
       <div class="dactions">
         <button class="dclose" id="btnSaveKey">Зберегти</button>
         ${key?`<button class="dclar" id="btnClearKey">Прибрати ключ</button>`:''}
@@ -774,11 +926,20 @@ function openAISettings(){
       </div>
     `;
     overlay.classList.add('show');
+    let pickedMode = aiMode;
+    detail.querySelectorAll('.mchip').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        pickedMode = b.dataset.mode;
+        detail.querySelectorAll('.mchip').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+      });
+    });
     el('btnSaveKey').addEventListener('click', ()=>{
       const v = el('apiKeyInput').value.trim();
       const m = el('modelSelect').value;
       if(v) idbSetSetting('apiKey', v);
       idbSetSetting('model', m);
+      idbSetSetting('aiMode', pickedMode);
       overlay.classList.remove('show');
     });
     const cb=el('btnClearKey'); if(cb) cb.addEventListener('click', ()=>{
@@ -816,7 +977,7 @@ async function callClaudeReading(promptOrMessages, apiKey, model){
   return text;
 }
 
-function buildAIPrompt(mn){
+function buildAIPrompt(mn, flavorText, profileLine){
   const btn = spreadRow.querySelector(`[data-spread="${spreadType}"]`);
   const spreadLabel = btn ? btn.textContent : `${positionsConfig.length} карт`;
   const lines = mn.map(n=>{
@@ -833,12 +994,12 @@ function buildAIPrompt(mn){
     }
     return block;
   }).join('\n');
-  return `Ти — досвідчена, мудра ворожка-тарологиня зі своїм голосом і манерою мовлення: трохи загадкова, дуже уважна до деталей, говорить образно й живо, наче оповідає історію біля свічки, а не читає довідник.
+  return `${flavorText || AI_MODES.default.flavor}
 
 ВНУТРІШНІ ДАНІ РОЗКЛАДУ (це лише сировина для тебе, людина цього тексту не побачить і не повинна побачити цю розмітку):
 Розклад: ${spreadLabel}.
 ${question?`Питання: «${question}»`:'Питання не вказане — загальний огляд.'}
-${lines}
+${profileLine?profileLine+'\n':''}${lines}
 
 ЗАВДАННЯ:
 Напиши цілісну, літературну оповідь-прочитання цього розкладу українською мовою — так, як говорить жива людина з даром, а не звіт. Це має читатись як одна безперервна історія чи монолог, а не як розбір по пунктах.
@@ -1107,9 +1268,23 @@ async function sendChatFromInput(){
 async function runAIAnalysis(){
   const key = await idbGetSetting('apiKey');
   if(!key){ openAISettings(); return; }
-  const model = (await idbGetSetting('model')) || 'claude-haiku-4-5-20251001';
+  const [model, aiMode, pName, pBirth, pZodiac] = await Promise.all([
+    idbGetSetting('model'), idbGetSetting('aiMode'),
+    idbGetSetting('userName'), idbGetSetting('userBirth'), idbGetSetting('userZodiac')
+  ]);
+  const modelFinal = model || 'claude-haiku-4-5-20251001';
+  const flavor = (AI_MODES[aiMode] || AI_MODES.default).flavor;
+  let profileLine = '';
+  {
+    const parts = [];
+    if(pName) parts.push(`ім'я: ${pName}`);
+    const nn = nameNumber(pName); if(nn) parts.push(`число імені: ${nn}`);
+    const bn = birthNumber(pBirth); if(bn) parts.push(`число долі: ${bn}`);
+    if(pZodiac) parts.push(`знак зодіаку: ${pZodiac}`);
+    if(parts.length) profileLine = `Про людину (використай лише якщо органічно лягає, не обов'язково згадувати все): ${parts.join(', ')}.`;
+  }
   const mn = mainNodes();
-  const prompt = buildAIPrompt(mn);
+  const prompt = buildAIPrompt(mn, flavor, profileLine);
   detail.innerHTML = `
     <div class="dpos">Глибокий аналіз</div>
     <h2 style="font-family:var(--serif);margin:10px 0;">Claude читає розклад…</h2>
@@ -1118,7 +1293,7 @@ async function runAIAnalysis(){
   overlay.classList.add('show');
   try{
     aiChatHistory = [{role:'user', content: prompt, hidden:true}];
-    const text = await callClaudeReading(aiChatHistory, key, model);
+    const text = await callClaudeReading(aiChatHistory, key, modelFinal);
     aiChatHistory.push({role:'assistant', content:cleanMarkdown(text)});
     renderChatUI(false);
     speakMessage(aiChatHistory.length-1);
@@ -1281,19 +1456,23 @@ function doShuffle(){
   question = qInput.value.trim();
   shuffleBtn.disabled=true; spreadRow.style.pointerEvents='none'; qInput.disabled=true;
   deckStack.classList.add('shuffling');
-  order=fisherYates(DECK.map((_,i)=>i));
+  const intensity = parseInt(shuffleIntensityEl.value,10) || 3;
+  let shuffled = DECK.map((_,i)=>i);
+  for(let p=0;p<intensity;p++) shuffled = fisherYates(shuffled);
+  order = shuffled;
   reversedMap={}; order.forEach(i=>{reversedMap[i]=Math.random()<0.38;});
   remaining=order.slice();
   nodes=[]; nextId=1; pendingClarifyParentId=null;
   summaryRow.innerHTML=''; resetRow.innerHTML='';
 
+  const animDuration = 500 + intensity*70;
   setTimeout(()=>{
     deckStack.classList.remove('shuffling');
     setupEl.style.display='none'; stage.style.display='none';
     if(question){ qBanner.textContent='« '+question+' »'; qBanner.classList.add('show'); }
     board.classList.add('show'); fanWrap.classList.add('show');
     renderBoard(); renderFanLabel(); renderFan();
-  },650);
+  }, animDuration);
 }
 
 /* ---- board rendering ---- */
@@ -1362,7 +1541,8 @@ function renderFanLabel(){
 function renderFan(){
   fan.innerHTML='';
   const n=remaining.length;
-  if(n===0){ fanLabel.textContent='Колода вичерпана — перетасуй наново.'; return; }
+  if(n===0){ fanLabel.textContent='Колода вичерпана — перетасуй наново.'; reshuffleBtnEl.style.display='none'; return; }
+  reshuffleBtnEl.style.display = n>1 ? 'block' : 'none';
   remaining.forEach((deckIdx,pos)=>{
     const c=document.createElement('div');
     c.className='tcard'; c.dataset.pos=pos;
@@ -1375,6 +1555,15 @@ function renderFan(){
   });
   // center the row on the middle card for a nicer starting view
   requestAnimationFrame(()=>{ fan.scrollLeft = (fan.scrollWidth - fan.clientWidth)/2; });
+}
+
+function reshuffleRemaining(){
+  if(remaining.length<2) return;
+  fisherYates(remaining); fisherYates(remaining);
+  remaining.forEach(deckIdx=>{ reversedMap[deckIdx]=Math.random()<0.38; });
+  fan.classList.add('reshuffling');
+  setTimeout(()=>fan.classList.remove('reshuffling'), 500);
+  renderFan();
 }
 
 function onDrawFanCard(fanPos){
