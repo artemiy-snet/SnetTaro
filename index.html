@@ -842,18 +842,7 @@ function openUserProfile(){
   });
 }
 function renderUserProfile(){
-  const nn = nameNumber(userProfile.name);
-  const bn = birthNumber(userProfile.birth);
-  const autoZ = zodiacFromDate(userProfile.birth);
-  const activeZodiacKey = userProfile.zodiacKey || (autoZ ? autoZ.name : '');
-  let numHTML = '';
-  if(!nn && !bn) numHTML = `<p style="color:var(--ink-soft);font-size:12.5px;">Введи ім'я або дату народження, щоб побачити число.</p>`;
-  else {
-    if(nn) numHTML += `<p style="margin-bottom:6px;"><strong>Число імені: ${nn}</strong> — ${NUMBER_MEANINGS[nn]}</p>`;
-    if(bn) numHTML += `<p><strong>Число долі: ${bn}</strong> — ${NUMBER_MEANINGS[bn]}</p>`;
-  }
-  const zodiacGridHTML = ZODIAC.map(z=>`<button class="choice-btn zchip ${z.name===activeZodiacKey?'active':''}" data-z="${z.name}" style="min-width:56px;">${z.short}<br>${z.name}</button>`).join('');
-  const activeZ = ZODIAC.find(z=>z.name===activeZodiacKey);
+  const zodiacGridHTML = ZODIAC.map(z=>`<button class="choice-btn zchip" data-z="${z.name}" style="min-width:56px;">${z.short}<br>${z.name}</button>`).join('');
   detail.innerHTML = `
     <div class="dpos">Профіль</div>
     <h2 style="font-family:var(--serif);margin:6px 0 10px;">Про тебе</h2>
@@ -864,20 +853,21 @@ function renderUserProfile(){
     <h4>Дата народження (необов'язково)</h4>
     <input type="date" id="profBirthInput" value="${userProfile.birth}"
       style="width:100%;border:1px solid #d8cfb5;border-radius:8px;padding:10px;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fbf9f2;box-sizing:border-box;">
-    <div style="margin-top:12px;">${numHTML}</div>
-    <h4>Знак зодіаку${autoZ?' (визначено з дати)':''}</h4>
+    <div id="numResultBox" style="margin-top:12px;"></div>
+    <h4 id="zodiacHeading">Знак зодіаку</h4>
     <div class="spread-row" id="zodiacGrid" style="margin-bottom:10px;">${zodiacGridHTML}</div>
-    <div style="font-size:12.5px;line-height:1.5;min-height:20px;">${activeZ?`<strong>${activeZ.name} ${activeZ.short}</strong> · ${activeZ.dates}<br>Стихія ${activeZ.element} · керує ${activeZ.ruler}<br>${activeZ.text}`:''}</div>
+    <div id="zodiacInfoBox" style="font-size:12.5px;line-height:1.5;min-height:20px;"></div>
     <div class="dactions">
       <button class="dclose" id="btnSaveProfile">Зберегти</button>
       <button class="dclar" id="btnCloseProfile">Закрити</button>
     </div>
   `;
   overlay.classList.add('show');
-  el('profNameInput').addEventListener('input', e=>{ userProfile.name=e.target.value; renderUserProfile(); });
-  el('profBirthInput').addEventListener('input', e=>{ userProfile.birth=e.target.value; userProfile.zodiacKey=''; renderUserProfile(); });
+  updateProfileDynamicParts();
+  el('profNameInput').addEventListener('input', e=>{ userProfile.name=e.target.value; updateProfileDynamicParts(); });
+  el('profBirthInput').addEventListener('input', e=>{ userProfile.birth=e.target.value; userProfile.zodiacKey=''; updateProfileDynamicParts(); });
   detail.querySelectorAll('.zchip').forEach(b=>{
-    b.addEventListener('click', ()=>{ userProfile.zodiacKey=b.dataset.z; renderUserProfile(); });
+    b.addEventListener('click', ()=>{ userProfile.zodiacKey=b.dataset.z; updateProfileDynamicParts(); });
   });
   el('btnSaveProfile').addEventListener('click', ()=>{
     idbSetSetting('userName', userProfile.name);
@@ -886,6 +876,31 @@ function renderUserProfile(){
     overlay.classList.remove('show');
   });
   el('btnCloseProfile').addEventListener('click', ()=>overlay.classList.remove('show'));
+}
+
+function updateProfileDynamicParts(){
+  const nn = nameNumber(userProfile.name);
+  const bn = birthNumber(userProfile.birth);
+  const autoZ = zodiacFromDate(userProfile.birth);
+  const activeZodiacKey = userProfile.zodiacKey || (autoZ ? autoZ.name : '');
+  const numBox = el('numResultBox');
+  if(numBox){
+    let numHTML = '';
+    if(!nn && !bn) numHTML = `<p style="color:var(--ink-soft);font-size:12.5px;">Введи ім'я або дату народження, щоб побачити число.</p>`;
+    else {
+      if(nn) numHTML += `<p style="margin-bottom:6px;"><strong>Число імені: ${nn}</strong> — ${NUMBER_MEANINGS[nn]}</p>`;
+      if(bn) numHTML += `<p><strong>Число долі: ${bn}</strong> — ${NUMBER_MEANINGS[bn]}</p>`;
+    }
+    numBox.innerHTML = numHTML;
+  }
+  const heading = el('zodiacHeading');
+  if(heading) heading.textContent = 'Знак зодіаку' + (autoZ ? ' (визначено з дати)' : '');
+  detail.querySelectorAll('.zchip').forEach(b=>{
+    b.classList.toggle('active', b.dataset.z===activeZodiacKey);
+  });
+  const activeZ = ZODIAC.find(z=>z.name===activeZodiacKey);
+  const zBox = el('zodiacInfoBox');
+  if(zBox) zBox.innerHTML = activeZ ? `<strong>${activeZ.name} ${activeZ.short}</strong> · ${activeZ.dates}<br>Стихія ${activeZ.element} · керує ${activeZ.ruler}<br>${activeZ.text}` : '';
 }
 
 const AI_MODES = {
