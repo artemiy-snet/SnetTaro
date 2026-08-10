@@ -917,6 +917,7 @@ function wrapWordsForHighlight(text){
 
 function renderChatUI(loading){
   const bubbles = aiChatHistory.map((m,i)=>{
+    if(m.hidden) return '';
     const isUser = m.role==='user';
     const isReading = i===currentSpeakMsgIndex;
     const bodyHTML = isReading ? wrapWordsForHighlight(speechSanitize(m.content)) : escapeHtml(m.content);
@@ -1115,7 +1116,7 @@ async function runAIAnalysis(){
   `;
   overlay.classList.add('show');
   try{
-    aiChatHistory = [{role:'user', content: prompt}];
+    aiChatHistory = [{role:'user', content: prompt, hidden:true}];
     const text = await callClaudeReading(aiChatHistory, key, model);
     aiChatHistory.push({role:'assistant', content:cleanMarkdown(text)});
     renderChatUI(false);
