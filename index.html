@@ -247,6 +247,7 @@
       <button class="choice-btn" data-spread="10">10 карт — Кельтський хрест</button>
     </div>
     <button class="primary-btn" id="shuffleBtn">Перетасувати колоду</button>
+    <button class="ghost-btn" id="browseDeckBtn">📖 Роздивитись колоду</button>
   </div>
 
   <div id="stage">
@@ -518,12 +519,18 @@ async function idbLoadAll(){
     });
   }catch(e){ return {}; }
 }
+let cardManifest = {};
+fetch('cards/manifest.json').then(r=>r.ok?r.json():{}).then(m=>{ cardManifest = m||{}; }).catch(()=>{});
+function cardImageFilename(c){
+  const slug = c.folderFile.replace(/\.[a-z0-9]+$/i,'');
+  return cardManifest[slug] || c.folderFile;
+}
 function cardVisualHTML(c, deckIdx){
   if(deckIdx!=null && customImages[deckIdx]){
     return `<div class="cimg"><img src="${customImages[deckIdx]}" alt="${c.name}"></div>`;
   }
   return `<div class="cimg" style="--icol:${c.iconColor}">
-    <img src="cards/${c.folderFile}" alt="${c.name}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <img src="cards/${cardImageFilename(c)}" alt="${c.name}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
     <div class="svgfallback">${svgIcon(c.iconKey)}</div>
   </div>`;
 }
@@ -716,6 +723,8 @@ customImgInput.addEventListener('change', e=>{
   });
 });
 deckCustomBtn.addEventListener('click', ()=>openDeckCustomizer('all'));
+const browseDeckBtn=el('browseDeckBtn');
+if(browseDeckBtn) browseDeckBtn.addEventListener('click', ()=>openDeckBrowser('all'));
 aiSettingsBtn.addEventListener('click', ()=>openAISettings());
 
 /* ---- AI-powered deep reading: user's own Anthropic API key, called directly
@@ -1077,6 +1086,71 @@ async function runAIAnalysis(){
     el('btnBackErr').addEventListener('click', ()=>showSummary('structured'));
     el('btnOpenSettingsErr').addEventListener('click', openAISettings);
   }
+}
+
+function openCardInfo(navList, navIdx){
+  const deckIdx = navList[navIdx];
+  const c = DECK[deckIdx];
+  detail.innerHTML = `
+    <div class="dpos">${navIdx+1} / ${navList.length}</div>
+    <div class="dtitle" style="margin-bottom:10px;">
+      <div class="dnum">${c.arcana==='major'?'Старший Аркан '+c.n:c.n}</div>
+      <h2 style="margin:2px 0;">${c.name}</h2>
+      <div class="delem">${c.elem}</div>
+    </div>
+    <div class="dbigimg">${cardVisualHTML(c, deckIdx)}</div>
+    <h4>Сюжет карти</h4><p>${c.img}</p>
+    <h4>Пряме значення</h4><p>${c.up}</p>
+    ${c.altUp?`<p class="dsecondary"><em>Альтернативно:</em> ${c.altUp}</p>`:''}
+    <h4>Перевернуте значення</h4><p>${c.rev}</p>
+    ${c.altRev?`<p class="dsecondary"><em>Альтернативно:</em> ${c.altRev}</p>`:''}
+    <h4>Ключові асоціації</h4><div class="kw">${c.kw.map(k=>`<span>${k}</span>`).join('')}</div>
+    <div class="dactions">
+      <button class="dclar" id="btnPrevCard" ${navIdx===0?'disabled style="opacity:.35;"':''}>← Попередня</button>
+      <button class="dclar" id="btnNextCard" ${navIdx===navList.length-1?'disabled style="opacity:.35;"':''}>Наступна →</button>
+    </div>
+    <div class="dactions"><button class="dclose" id="btnCloseCardInfo">Закрити</button></div>
+  `;
+  overlay.classList.add('show');
+  const pb=el('btnPrevCard'); if(pb) pb.addEventListener('click', ()=>{ if(navIdx>0) openCardInfo(navList, navIdx-1); });
+  const nb=el('btnNextCard'); if(nb) nb.addEventListener('click', ()=>{ if(navIdx<navList.length-1) openCardInfo(navList, navIdx+1); });
+  el('btnCloseCardInfo').addEventListener('click', ()=>overlay.classList.remove('show'));
+}
+
+function openDeckBrowser(filter){
+  filter = filter||'all';
+  const filters=[
+    {key:'all',label:'Усі'},{key:'major',label:'Старші'},{key:'wands',label:'Жезли'},
+    {key:'cups',label:'Кубки'},{key:'swords',label:'Мечі'},{key:'pentacles',label:'Пентаклі'},
+  ];
+  const items = DECK.map((c,i)=>({c,i})).filter(({c})=>{
+    if(filter==='all') return true;
+    if(filter==='major') return c.arcana==='major';
+    return c.suitKey===filter;
+  });
+  const navList = items.map(x=>x.i);
+  const tabsHTML = filters.map(f=>`<button class="choice-btn ${f.key===filter?'active':''}" data-filt="${f.key}">${f.label}</button>`).join('');
+  const gridHTML = items.map(({c,i},idx)=>`
+    <div class="dgcell" data-idx="${idx}">
+      ${cardVisualHTML(c,i)}
+      <div class="dgname">${c.name}</div>
+    </div>`).join('');
+  detail.innerHTML = `
+    <div class="dpos">Колода · перегляд</div>
+    <h2 style="font-family:var(--serif);margin:6px 0 8px;">Роздивись усі 78 карт</h2>
+    <p style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Торкнись картки, щоб побачити її на весь екран — сюжет, обидва значення й асоціації. Далі можна гортати стрілками «Попередня / Наступна».</p>
+    <div class="spread-row" id="dbTabs" style="margin-bottom:10px;">${tabsHTML}</div>
+    <div class="deckgrid">${gridHTML}</div>
+    <div class="dactions"><button class="dclose" id="btnCloseDB">Закрити</button></div>
+  `;
+  overlay.classList.add('show');
+  el('dbTabs').addEventListener('click', e=>{
+    const b=e.target.closest('[data-filt]'); if(!b) return; openDeckBrowser(b.dataset.filt);
+  });
+  detail.querySelectorAll('.dgcell').forEach(cell=>{
+    cell.addEventListener('click', ()=>openCardInfo(navList, parseInt(cell.dataset.idx,10)));
+  });
+  el('btnCloseDB').addEventListener('click', ()=>overlay.classList.remove('show'));
 }
 
 function openDeckCustomizer(filter){
