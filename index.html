@@ -789,7 +789,8 @@ function openAISettings(){
 }
 
 async function callClaudeReading(promptOrMessages, apiKey, model){
-  const messages = typeof promptOrMessages === 'string' ? [{role:'user', content:promptOrMessages}] : promptOrMessages;
+  const raw = typeof promptOrMessages === 'string' ? [{role:'user', content:promptOrMessages}] : promptOrMessages;
+  const messages = raw.map(m=>({role:m.role, content:m.content}));
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{
