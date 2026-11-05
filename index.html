@@ -1118,6 +1118,9 @@ function buildAIPrompt(mn, flavorText, profileLine){
 ${question?`Питання: «${question}»`:'Питання не вказане — загальний огляд.'}
 ${profileLine?profileLine+'\n':''}${lines}
 
+ЗВ'ЯЗКИ МІЖ КАРТАМИ (карти перелічені в порядку читання; це структурні спостереження — обов'язково спирайся на них):
+${synthesize(mn, positionsConfig).slice(0,-1).map(l=>'— '+l).join('\n')}
+
 ЗАВДАННЯ:
 Напиши цілісну, літературну оповідь-прочитання цього розкладу українською мовою — так, як говорить жива людина з даром, а не звіт. Це має читатись як одна безперервна історія чи монолог, а не як розбір по пунктах.
 
@@ -1126,6 +1129,7 @@ ${profileLine?profileLine+'\n':''}${lines}
 — Не використовуй займенники «він» / «вона» / «його» / «її» стосовно людей у розкладі. Замість цього говори про «людину, для якої лягли ці карти» (або просто «людину» — це слово в українській граматично узгоджується без прив'язки до статі) і, якщо доречно, окремо про «людину, яка дивиться в ці карти» (якщо це читання для когось іншого). Якщо в розмові після цього тобі напишуть від першої особи — звертайся напряму на «ти».
 — Уникай підзаголовків, буквальних назв позицій розкладу («Минуле:», «Порада:» тощо) та будь-якої табличної/пунктової структури. Пиши суцільними абзацами, як прозу.
 — Все одно тримайся психологічної, архетипної рамки: те, що ти описуєш — це дзеркало внутрішніх процесів людини, а не буквальне передбачення майбутнього. Без прямих тверджень «станеться X» — краще «щось у цьому напрямку вже проростає» тощо.
+— Читай карти строго в порядку позицій: кожна наступна карта продовжує, уточнює або заперечує попередню — покажи цей перехід. Перша і остання карта задають траєкторію історії.
 — Обов'язково вплети структурні спостереження (де згущується напруга, які теми повторюються, як одне випливає з іншого, суперечності між картами) — але подай це як частину оповіді, відчуття, а не як окремий аналітичний блок.
 — Мова жива, образна, трохи ритмічна, без канцеляризмів і без містичної театральності на кшталт «Зорі провіщають...». Довжина — стільки, скільки потрібно історії, щоб прозвучати повністю й не обірватись на півслові.
 
@@ -1807,36 +1811,128 @@ function buildNarrative(mn, posConfig, allNodes){
   let paragraphs;
   if(mn.length<=3) paragraphs=[sentences.join(' ')];
   else paragraphs=[sentences.slice(0,6).join(' '), sentences.slice(6).join(' ')];
-  paragraphs.push(synthesize(mn).join(' '));
+  paragraphs.push(synthesize(mn, posConfig, {pairs:false}).join(' '));
   return paragraphs.filter(p=>p.trim().length>0);
 }
 
-/* ---- synthesis / summary ---- */
-function synthesize(mn){
-  mn = mn || mainNodes();
-  const majors=mn.filter(n=>DECK[n.deckIdx].arcana==='major').length;
-  const minors=mn.length-majors;
-  const reversedCount=mn.filter(n=>n.reversed).length;
-  const suitCounts={};
-  mn.forEach(n=>{ const c=DECK[n.deckIdx]; if(c.arcana==='minor'){ suitCounts[c.suitKey]=(suitCounts[c.suitKey]||0)+1; } });
-  const numCounts={};
-  mn.forEach(n=>{ const c=DECK[n.deckIdx]; if(c.arcana==='minor'){ numCounts[c.n]=(numCounts[c.n]||0)+1; } });
+/* ---- synthesis / summary: порядок читання і зв'язки між картами ---- */
+/* Стихії Старших Арканів (класичні астрологічні відповідності Золотої Зорі) */
+const MAJOR_ELEMENT = ['air','air','water','earth','fire','earth','air','water','fire','earth','fire','air','water','water','fire','earth','fire','air','water','fire','fire','earth'];
+const SUIT_ELEMENT = {wands:'fire', cups:'water', swords:'air', pentacles:'earth'};
+const ELEM_NAME = {fire:'Вогонь', water:'Вода', air:'Повітря', earth:'Земля'};
+const ELEM_SPHERE = {fire:'дія та ініціатива', water:'почуття та стосунки', air:'думки та рішення', earth:'гроші, робота й тіло'};
+const RANK_THEME = {A:'старт, зерно нового', '2':'вибір і рівновага', '3':'перші результати, співпраця', '4':'стабільність, закріплення', '5':'конфлікт, випробування', '6':'обмін, відновлення гармонії', '7':'перевірка, оцінка, вибір стратегії', '8':'рух, майстерність', '9':'майже фінал, витримка', '10':'завершення циклу', P:'учнівство, новини', K:'стрімка дія', Q:'зріле, турботливе володіння', Kg:'влада й відповідальність'};
+const COURT = ['P','K','Q','Kg'];
 
+function cardElement(c, deckIdx){ return c.arcana==='major' ? MAJOR_ELEMENT[deckIdx] : SUIT_ELEMENT[c.suitKey]; }
+function elemRelation(a, b){
+  if(a===b) return 'same';
+  const k=[a,b].sort().join('+');
+  if(k==='air+fire' || k==='earth+water') return 'support';
+  if(k==='fire+water' || k==='air+earth') return 'clash';
+  return 'neutral';
+}
+function cardRef(n, posConfig){
+  const c=DECK[n.deckIdx];
+  const lbl = posConfig && posConfig[n.posIndex] ? posConfig[n.posIndex].label : `Карта ${n.posIndex+1}`;
+  return `${lbl} («${c.name}${n.reversed?', перев.':''}»)`;
+}
+
+/* Повертає масив рядків. Карти читаються в порядку позицій (зліва направо / за схемою розкладу). */
+function synthesize(mn, posConfig, opts){
+  opts = opts || {pairs:true};
+  mn = (mn || mainNodes()).slice().sort((a,b)=>a.posIndex-b.posIndex);
+  posConfig = posConfig || positionsConfig;
   const lines=[];
-  if(majors>minors) lines.push('У розкладі переважають Старші Аркани — це радше про глибинні, архетипні процеси, ніж про побутові деталі.');
-  else if(minors>majors) lines.push('У розкладі переважають Молодші Аркани — йдеться більше про конкретні, повсякденні аспекти ситуації.');
-  else if(mn.length>1) lines.push('Старші й Молодші Аркани у рівновазі — і глибинна тема, і конкретні дії важливі однаково.');
+  if(!mn.length) return lines;
+  const cards = mn.map(n=>({n, c:DECK[n.deckIdx], el:cardElement(DECK[n.deckIdx], n.deckIdx)}));
+  const majors = cards.filter(x=>x.c.arcana==='major');
+  const minors = cards.filter(x=>x.c.arcana==='minor');
+  const reversedCount = mn.filter(n=>n.reversed).length;
 
-  const dominantSuit=Object.entries(suitCounts).sort((a,b)=>b[1]-a[1])[0];
-  if(dominantSuit && dominantSuit[1]>=2) lines.push(`Масть «${SUITS[dominantSuit[0]].name}» зустрічається кілька разів — фокус ситуації лежить у сфері ${SUITS[dominantSuit[0]].domain}.`);
-
-  const dominantNum=Object.entries(numCounts).sort((a,b)=>b[1]-a[1])[0];
-  if(dominantNum && dominantNum[1]>=2) lines.push(`Число «${dominantNum[0]}» повторюється — варто звернути увагу на його тему в кількох сферах одразу.`);
-
+  /* 1. Баланс Арканів */
   if(mn.length>1){
-    if(reversedCount >= Math.ceil(mn.length/2)) lines.push('Багато перевернутих карт — можливо, є внутрішній опір, блок або тема, яку ситуація ще не готова показати прямо.');
-    else if(reversedCount===0) lines.push('Усі карти прямі — енергії розкладу виражені відкрито, без прихованих блоків.');
+    if(majors.length===0) lines.push('Жодного Старшого Аркана — ситуація повсякденна, і вона здебільшого в руках самої людини, без «великих сил».');
+    else if(majors.length>minors.length) lines.push(`Старших Арканів ${majors.length} з ${mn.length} — тема глибша, ніж здається: це етап життя, а не просто епізод.`);
+    else if(minors.length>majors.length) lines.push('Переважають Молодші Аркани — йдеться передусім про конкретні, повсякденні кроки.');
+    else lines.push('Старші й Молодші Аркани в рівновазі — важливі і глибинна тема, і конкретні дії.');
   }
+
+  /* 2. Стихії: що домінує і чого бракує */
+  const elCount={};
+  cards.forEach(x=>{ elCount[x.el]=(elCount[x.el]||0)+1; });
+  const topEl = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0];
+  const topEls = Object.entries(elCount).filter(e=>e[1]===topEl[1]).map(e=>e[0]);
+  if(mn.length>=3 && topEl[1]>=2){
+    if(topEls.length===1) lines.push(`Найсильніша стихія — ${ELEM_NAME[topEl[0]]} (${topEl[1]} з ${mn.length}): фокус розкладу — ${ELEM_SPHERE[topEl[0]]}.`);
+    else lines.push(`Порівну стихій ${topEls.map(e=>ELEM_NAME[e]).join(' і ')} — розклад розривається між сферами «${topEls.map(e=>ELEM_SPHERE[e]).join('» і «')}»; ${elemRelation(topEls[0],topEls[1])==='clash'?'вони конфліктують, тож потрібен баланс':elemRelation(topEls[0],topEls[1])==='support'?'вони підтримують одна одну':'їх треба поєднати свідомо'}.`);
+  }
+  if(mn.length>=3 && minors.length>=2){
+    const suitsPresent = new Set(minors.map(x=>x.c.suitKey));
+    const missing = Object.keys(SUITS).filter(k=>!suitsPresent.has(k));
+    if(missing.length && missing.length<=2) lines.push(`Немає масті ${missing.map(k=>'«'+SUITS[k].name+'»').join(' і ')} — ${missing.length>1?'сфери':'сфера'} «${missing.map(k=>ELEM_SPHERE[SUIT_ELEMENT[k]]).join('» і «')}» зараз не в центрі уваги або ще не ${missing.length>1?'проявились':'проявилась'}.`);
+  }
+
+  /* 3. Повтори: масть, число, тема числа */
+  const suitCounts={}; minors.forEach(x=>{ suitCounts[x.c.suitKey]=(suitCounts[x.c.suitKey]||0)+1; });
+  const domSuit=Object.entries(suitCounts).sort((a,b)=>b[1]-a[1])[0];
+  const suitSameAsEl = domSuit && mn.length>=3 && topEls.length===1 && topEl[0]===SUIT_ELEMENT[domSuit[0]] && topEl[1]===domSuit[1];
+  if(domSuit && domSuit[1]>=2 && !suitSameAsEl) lines.push(`Масть «${SUITS[domSuit[0]].name}» повторюється ${domSuit[1]} рази — сфера ${SUITS[domSuit[0]].domain} проходить крізь увесь розклад.`);
+  const numCounts={}; minors.forEach(x=>{ numCounts[x.c.n]=(numCounts[x.c.n]||0)+1; });
+  Object.entries(numCounts).filter(e=>e[1]>=2 && !COURT.includes(e[0])).forEach(([num,cnt])=>{
+    lines.push(`Число ${num==='A'?'«Туз»':num} випало ${cnt} рази — тема «${RANK_THEME[num]}» звучить у кількох сферах одразу.`);
+  });
+  const courts = minors.filter(x=>COURT.includes(x.c.n));
+  if(courts.length>=2) lines.push(`${courts.length} придворні карти — у ситуації важливі конкретні люди або ролі, які людина приміряє на себе.`);
+
+  /* 4. Послідовні Старші Аркани — сюжетний крок */
+  const majNums = majors.map(x=>x.n.deckIdx).sort((a,b)=>a-b);
+  for(let i=1;i<majNums.length;i++){
+    if(majNums[i]-majNums[i-1]===1) lines.push(`«${DECK[majNums[i-1]].name}» і «${DECK[majNums[i]].name}» стоять поруч у шляху Старших Арканів — це сусідні етапи одного процесу.`);
+  }
+
+  /* 5. Порядок читання: сусідні пари */
+  for(let i=1; opts.pairs && i<cards.length; i++){
+    const a=cards[i-1], b=cards[i];
+    const longSpread = cards.length>5;
+    const rel = elemRelation(a.el, b.el);
+    const pair = `${cardRef(a.n,posConfig)} → ${cardRef(b.n,posConfig)}`;
+    if(longSpread && rel!=='clash') continue;
+    if(rel==='same') lines.push(`${pair}: одна стихія (${ELEM_NAME[a.el]}) — друга карта підсилює і продовжує першу.`);
+    else if(rel==='support') lines.push(`${pair}: ${ELEM_NAME[a.el]} і ${ELEM_NAME[b.el]} підтримують одне одного — перехід між цими позиціями плавний.`);
+    else if(rel==='clash') lines.push(`${pair}: ${ELEM_NAME[a.el]} і ${ELEM_NAME[b.el]} конфліктують — саме на цьому стику напруга розкладу.`);
+    if(a.n.reversed!==b.n.reversed) lines.push(`${pair}: зміна положення — ${a.n.reversed?'блок першої карти знімається в наступній':'відкрита енергія наштовхується на опір'}.`);
+  }
+
+  /* 6. Траєкторія: перша → остання */
+  if(cards.length>=3){
+    const f=cards[0], l=cards[cards.length-1];
+    let t=`Траєкторія розкладу: від «${f.c.name}» до «${l.c.name}»`;
+    if(f.n.reversed && !l.n.reversed) t+=' — рух від блоку до розв’язку.';
+    else if(!f.n.reversed && l.n.reversed) t+=' — наприкінці з’являється опір, тож фінал вимагає уваги.';
+    else if(f.el!==l.el) t+=` — зміщення від сфери «${ELEM_SPHERE[f.el]}» до сфери «${ELEM_SPHERE[l.el]}».`;
+    else t+=' — розклад тримається однієї теми від початку до кінця.';
+    lines.push(t);
+  }
+
+  /* 7. Перевернуті */
+  if(mn.length>1){
+    if(reversedCount===mn.length) lines.push('Усі карти перевернуті — енергія спрямована всередину: відчувається більше, ніж показується.');
+    else if(reversedCount >= Math.ceil(mn.length/2)) lines.push('Багато перевернутих карт — є внутрішній опір або тема, яку ще не готові показати прямо.');
+    else if(reversedCount===0) lines.push('Усі карти прямі — енергії виражені відкрито, без прихованих блоків.');
+  }
+
+  /* 8. Уточнення */
+  const withKids = mn.filter(n=>nodes.some(k=>k.parentId===n.id));
+  if(withKids.length) lines.push(`Уточнено: ${withKids.map(n=>'«'+DECK[n.deckIdx].name+'»').join(', ')} — ці позиції розкладу варто читати разом з їхніми уточненнями як одну думку.`);
+
+  /* 9. Повтори з попередніх розкладів (історія) */
+  const recent = (history||[]).slice(0,10);
+  cards.forEach(x=>{
+    const times = recent.filter(h=>(h.nodes||[]).some(k=>k.deckIdx===x.n.deckIdx)).length;
+    if(times>=1) lines.push(`«${x.c.name}» вже випадала в ${times===1?'одному з останніх розкладів':times+' з останніх розкладів'} — карта, що повертається, вказує на тему, яка ще не прожита.`);
+  });
+
   lines.push('Спробуй сам(а) помітити додаткові зв’язки між картами — це і є суть роботи з архетипами.');
   return lines;
 }
@@ -1859,7 +1955,7 @@ function showSummary(mode){
         ${kids.length?`<p style="margin:2px 0;font-size:12.5px;color:var(--ink-soft);"><em>Уточнення:</em> ${kids.map(k=>DECK[k.deckIdx].name+(k.reversed?' (пер.)':'')).join(', ')}</p>`:''}
       </div>`;
     }).join('');
-    const synth = synthesize(mn).map(l=>`<p>${l}</p>`).join('');
+    const synth = synthesize(mn, positionsConfig).map(l=>`<p>${l}</p>`).join('');
     bodyHTML = `<h4>Повна розшифровка розкладу</h4>` + rows + `<h4>Спільні теми</h4>` + synth;
   } else {
     const paragraphs = buildNarrative(mn, positionsConfig, nodes);
