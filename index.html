@@ -46,6 +46,14 @@
     color:var(--parchment);font-family:var(--sans);font-size:13.5px;padding:11px 13px;resize:none;
   }
   #qInput::placeholder{color:#726a8c;}
+  .qWarn{font-size:12px;color:#e3c06a;background:rgba(201,162,75,.1);border:1px solid rgba(201,162,75,.35);border-radius:10px;padding:7px 10px;margin:-4px 0 10px;}
+  .goalRow{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;}
+  .goalRow::-webkit-scrollbar{display:none;}
+  .goalRow .gchip{flex:0 0 auto;background:none;border:1px solid #362c52;color:#b8afd0;border-radius:16px;padding:6px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap;}
+  .goalRow .gchip.active{border-color:var(--gold);color:var(--gold);background:rgba(201,162,75,.08);}
+  .spreadHint{text-align:center;font-size:12px;color:#9c93b8;margin:-2px 0 12px;min-height:16px;}
+  .slotq{font-size:9.5px;line-height:1.25;color:#8f86ab;font-style:italic;margin-top:3px;}
+  .dposq{text-align:center;font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:13.5px;margin:2px 0 6px;}
   .spread-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
   .choice-btn{
     font-size:12.5px;color:var(--parchment);background:var(--panel);border:1px solid #362c52;border-radius:20px;
@@ -256,21 +264,10 @@
 
   <div id="setup">
     <textarea id="qInput" rows="2" placeholder="Твоє питання (необов'язково) — наприклад: на що варто звернути увагу зараз?"></textarea>
-    <div class="spread-row" id="spreadRow">
-      <button class="choice-btn active" data-spread="1">1 карта — Відповідь</button>
-      <button class="choice-btn" data-spread="3-time">3 карти — Минуле · Теперішнє · Майбутнє</button>
-      <button class="choice-btn" data-spread="3-mbs">3 карти — Розум · Тіло · Дух</button>
-      <button class="choice-btn" data-spread="3-pfr">3 карти — Вплив минулого · Ситуація · Результат</button>
-      <button class="choice-btn" data-spread="3-lmh">3 карти — Кохання · Гроші · Дім</button>
-      <button class="choice-btn" data-spread="yesno">3 карти — Так чи ні?</button>
-      <button class="choice-btn" data-spread="5-choice">5 карт — Вибір між двома шляхами</button>
-      <button class="choice-btn" data-spread="6-relationship">6 карт — Стосунки</button>
-      <button class="choice-btn" data-spread="7-horseshoe">7 карт — Підкова</button>
-      <button class="choice-btn" data-spread="7-chakra">7 карт — Чакровий</button>
-      <button class="choice-btn" data-spread="8-week">8 карт — Тиждень (тема + 7 днів)</button>
-      <button class="choice-btn" data-spread="8-month">8 карт — Місяць (по 2 на тиждень)</button>
-      <button class="choice-btn" data-spread="10">10 карт — Кельтський хрест</button>
-    </div>
+    <div id="qWarn" class="qWarn" hidden>Схоже, тут кілька питань. Одне питання — один розклад: так відповідь буде чіткішою.</div>
+    <div class="goalRow" id="goalRow"></div>
+    <div class="spread-row" id="spreadRow"></div>
+    <div class="spreadHint" id="spreadHint"></div>
     <div id="shuffleIntensityBox">
       <div class="siLabel">Інтенсивність тасування</div>
       <div class="siRow">
@@ -1159,32 +1156,50 @@ function waiteBlockHTML(c, reversed){
 }
 
 /* ================= SPREADS ================= */
+const P=(label,q)=>({label,q});
 const SPREADS = {
- '1':[{label:'Відповідь'}],
- '3-time':[{label:'Минуле'},{label:'Теперішнє'},{label:'Майбутнє'}],
- '3-mbs':[{label:'Розум'},{label:'Тіло'},{label:'Дух'}],
- '5-choice':[{label:'Ситуація'},{label:'Шлях А'},{label:'Шлях Б'},{label:'Приховане'},{label:'Порада'}],
- '6-relationship':[{label:'Ти'},{label:'Інша сторона'},{label:'Основа звʼязку'},{label:'Що обʼєднує'},{label:'Виклик'},{label:'Куди веде'}],
- '7-horseshoe':[{label:'Минуле'},{label:'Теперішнє'},{label:'Приховані фактори'},{label:'Перешкода'},{label:'Оточення'},{label:'Порада'},{label:'Імовірний напрямок'}],
- '3-pfr':[{label:'Вплив минулого'},{label:'Сучасна ситуація'},{label:'Результат'}],
- '3-lmh':[{label:'Кохання'},{label:'Гроші'},{label:'Дім'}],
- 'yesno':[{label:'Перша відповідь'},{label:'Друга відповідь'},{label:'Третя відповідь'}],
- '7-chakra':[{label:'Дім, фінанси та безпека'},{label:'Творчість і проєкти'},{label:'Енергія, здоров’я і мудрість'},{label:'Кохання і стосунки'},{label:'Спілкування'},{label:'Інтуїція і довіра'},{label:'Життєві цілі, духовність'}],
- '8-week':[{label:'Загальна тема тижня'},{label:'Понеділок'},{label:'Вівторок'},{label:'Середа'},{label:'Четвер'},{label:'Пʼятниця'},{label:'Субота'},{label:'Неділя'}],
- '8-month':[{label:'Тиждень 1'},{label:'Тиждень 2'},{label:'Тиждень 3'},{label:'Тиждень 4'},{label:'Тиждень 1 — доповнення'},{label:'Тиждень 2 — доповнення'},{label:'Тиждень 3 — доповнення'},{label:'Тиждень 4 — доповнення'}],
- '10':[
-   {label:'Суть питання'},
-   {label:'Виклик'},
-   {label:'Коріння (причина)'},
-   {label:'Минуле'},
-   {label:'Можливий розвиток'},
-   {label:'Найближче майбутнє'},
-   {label:'Твоя позиція'},
-   {label:'Оточення'},
-   {label:'Надії та страхи'},
-   {label:'Підсумок'},
- ]
+ '1':[P('Відповідь','Що мені зараз найважливіше знати?')],
+ '3-time':[P('Минуле','Що з минулого сформувало ситуацію?'),P('Теперішнє','Що відбувається зараз?'),P('Майбутнє','Куди це веде, якщо нічого не змінювати?')],
+ '3-mbs':[P('Розум','Що зараз у моїх думках?'),P('Тіло','Чого потребує моє тіло?'),P('Дух','Що живить мене зсередини?')],
+ '3-pfr':[P('Вплив минулого','Що з минулого досі впливає?'),P('Сучасна ситуація','Як справи насправді зараз?'),P('Результат','Чим це найімовірніше закінчиться?')],
+ '3-lmh':[P('Кохання','Що зараз у моєму особистому житті?'),P('Гроші','Що з моїми фінансами?'),P('Дім','Що відбувається вдома й у побуті?')],
+ 't3':[P('Проблема','У чому суть проблеми?'),P('Причина','Що її спричинило?'),P('Порада','Що з цим робити?')],
+ 'yesno':[P('Перша відповідь','Перша карта відповіді'),P('Друга відповідь','Друга карта відповіді'),P('Третя відповідь','Третя карта відповіді')],
+ '5-choice':[P('Ситуація','У чому суть вибору?'),P('Шлях А','Що дасть перший варіант?'),P('Шлях Б','Що дасть другий варіант?'),P('Приховане','Чого я не враховую?'),P('Порада','Що допоможе вирішити?')],
+ '6-relationship':[P('Ти','Що я приношу в ці стосунки?'),P('Інша сторона','Що приносить інша людина?'),P('Основа звʼязку','На чому тримаються стосунки?'),P('Що обʼєднує','Що нас зближує?'),P('Виклик','Що заважає?'),P('Куди веде','Яка перспектива?')],
+ 'work6':[P('Поточна ситуація','Що зараз з роботою чи грошима?'),P('Мої ресурси','На що я можу спертися?'),P('Перешкоди','Що мені заважає?'),P('Можливості','Які шанси я можу використати?'),P('Найближче майбутнє','Що на мене чекає найближчим часом?'),P('Підсумок і порада','Що порадить колода?')],
+ 'growth6':[P('Де я зараз','Яка моя точка зараз?'),P('Мій потенціал','Що в мені є, але ще не проявлене?'),P('Що розкрити','Що варто розвинути?'),P('Що відпустити','Від чого час звільнитися?'),P('Уроки','Чого мене вчить цей етап?'),P('Куди рухатися','Який мій наступний крок?')],
+ '7-horseshoe':[P('Минуле','Що було?'),P('Теперішнє','Що є?'),P('Приховані фактори','Що діє непомітно?'),P('Перешкода','Що заважає?'),P('Оточення','Як впливають люди навколо?'),P('Порада','Що робити?'),P('Імовірний напрямок','Куди все рухається?')],
+ 'tree7':[P('Ціль','До чого я прагну?'),P('Ресурси','Що в мене є для цього?'),P('Перешкоди','Що стоїть на шляху?'),P('Суть','Що головне в цій ситуації?'),P('Що підтримує','Хто чи що мені допоможе?'),P('Чого навчитися','Який урок тут прихований?'),P('Підсумок і порада','Як дійти до цілі?')],
+ '7-chakra':[P('Дім, фінанси та безпека','Чи почуваюся я в безпеці?'),P('Творчість і проєкти','Що з моєю творчою енергією?'),P('Енергія, здоров’я і мудрість','Звідки я беру сили?'),P('Кохання і стосунки','Що з моїм серцем?'),P('Спілкування','Чи говорю я те, що думаю?'),P('Інтуїція і довіра','Що підказує інтуїція?'),P('Життєві цілі, духовність','Куди веде мій шлях?')],
+ '8-week':[P('Загальна тема тижня','Яка головна енергія тижня?'),P('Понеділок','Що принесе понеділок?'),P('Вівторок','Що принесе вівторок?'),P('Середа','Що принесе середа?'),P('Четвер','Що принесе четвер?'),P('Пʼятниця','Що принесе пʼятниця?'),P('Субота','Що принесе субота?'),P('Неділя','Що принесе неділя?')],
+ '8-month':[P('Тиждень 1','Головне першого тижня'),P('Тиждень 2','Головне другого тижня'),P('Тиждень 3','Головне третього тижня'),P('Тиждень 4','Головне четвертого тижня'),P('Тиждень 1 — доповнення','Що ще важливо в перший тиждень?'),P('Тиждень 2 — доповнення','Що ще важливо в другий тиждень?'),P('Тиждень 3 — доповнення','Що ще важливо в третій тиждень?'),P('Тиждень 4 — доповнення','Що ще важливо в четвертий тиждень?')],
+ 'year13':[P('Тема року','Яка головна тема цього року?'), ...Array.from({length:12},(_,i)=>P(`${i+1}-й місяць`,`Яка енергія ${i+1}-го місяця від сьогодні?`))],
+ '10':[P('Суть питання','Що відбувається зараз?'),P('Виклик','Що протидіє або доповнює?'),P('Коріння (причина)','Що лежить в основі?'),P('Минуле','Що щойно минуло?'),P('Можливий розвиток','Найкраще, чого можна досягти'),P('Найближче майбутнє','Що буде найближчим часом?'),P('Твоя позиція','Як я ставлюся до ситуації?'),P('Оточення','Як впливають люди й обставини?'),P('Надії та страхи','На що я сподіваюся і чого боюся?'),P('Підсумок','Чим це закінчиться?')],
 };
+/* Мета → розклади; підказка за кількістю карт */
+const SPREAD_META = [
+ ['1','1 карта — Відповідь',['answer','self']],
+ ['yesno','3 карти — Так чи ні?',['answer','decision']],
+ ['3-time','3 карти — Минуле · Теперішнє · Майбутнє',['answer','future']],
+ ['3-pfr','3 карти — Вплив минулого · Ситуація · Результат',['answer','situation','future']],
+ ['t3','3 карти — Т-подібний: Проблема · Причина · Порада',['situation','decision']],
+ ['3-lmh','3 карти — Кохання · Гроші · Дім',['situation']],
+ ['3-mbs','3 карти — Розум · Тіло · Дух',['self']],
+ ['5-choice','5 карт — Вибір між двома шляхами',['decision']],
+ ['6-relationship','6 карт — Стосунки',['situation']],
+ ['work6','6 карт — Робота і гроші',['situation','future']],
+ ['growth6','6 карт — Особистий розвиток',['self']],
+ ['7-horseshoe','7 карт — Підкова',['situation','future']],
+ ['tree7','7 карт — Древо життя',['decision','self','situation']],
+ ['7-chakra','7 карт — Чакровий',['self']],
+ ['8-week','8 карт — Тиждень (тема + 7 днів)',['future']],
+ ['8-month','8 карт — Місяць (по 2 на тиждень)',['future']],
+ ['10','10 карт — Кельтський хрест',['situation']],
+ ['year13','13 карт — Рік (тема + 12 місяців)',['future']],
+];
+const GOALS = [['all','Усі'],['answer','❓ Відповідь'],['situation','🔍 Ситуація'],['future','🌙 Що далі'],['decision','⚖️ Рішення'],['self','🪷 Пізнати себе']];
+function spreadHint(n){ return n<=3 ? `${n} ${n===1?'карта':'карти'} — для простої відповіді чи поради.` : n<=7 ? `${n} карт — для аналізу ситуації.` : `${n} карт — для глибокого, багаторівневого розбору.`; }
 
 /* ================= STATE ================= */
 let order=[], reversedMap={}, remaining=[];
@@ -1458,7 +1473,7 @@ function buildAIPrompt(mn, flavorText, profileLine){
   const lines = mn.map(n=>{
     const c=DECK[n.deckIdx];
     const meaning = n.reversed?c.rev:c.up;
-    let block = `${positionsConfig[n.posIndex].label}: ${c.name}${n.reversed?' (перевернута)':''} — ${meaning} [ключові слова: ${(n.reversed?c.kwRev:c.kw).join(', ')}; кохання: ${c.dom.love[n.reversed?1:0]}; кар’єра: ${c.dom.career[n.reversed?1:0]}; фінанси: ${c.dom.money[n.reversed?1:0]}] [за Уейтом: ${n.reversed?c.waRev:c.waUp}]${n.note?` [особиста нотатка людини: ${n.note}]`:''}`;
+    let block = `${positionsConfig[n.posIndex].label}${positionsConfig[n.posIndex].q?' (питання позиції: «'+positionsConfig[n.posIndex].q+'»)':''}: ${c.name}${n.reversed?' (перевернута)':''} — ${meaning} [ключові слова: ${(n.reversed?c.kwRev:c.kw).join(', ')}; кохання: ${c.dom.love[n.reversed?1:0]}; кар’єра: ${c.dom.career[n.reversed?1:0]}; фінанси: ${c.dom.money[n.reversed?1:0]}] [за Уейтом: ${n.reversed?c.waRev:c.waUp}]${n.note?` [особиста нотатка людини: ${n.note}]`:''}`;
     const desc = allDescendants(n.id);
     if(desc.length){
       block += '\n' + desc.map(d=>{
@@ -1930,6 +1945,20 @@ spreadRow.addEventListener('click', e=>{
   positionsConfig=SPREADS[spreadType];
 });
 shuffleBtn.addEventListener('click', ()=>doShuffle());
+let goalFilter='all';
+function buildSpreadRow(){
+  el('goalRow').innerHTML = GOALS.map(([k,l])=>`<button class="gchip ${k===goalFilter?'active':''}" data-goal="${k}">${l}</button>`).join('');
+  spreadRow.innerHTML = SPREAD_META.filter(m=>goalFilter==='all'||m[2].includes(goalFilter))
+    .map(([k,l])=>`<button class="choice-btn ${k===spreadType?'active':''}" data-spread="${k}">${l}</button>`).join('');
+  el('spreadHint').textContent = spreadHint(SPREADS[spreadType].length);
+}
+el('goalRow').addEventListener('click', e=>{ const b=e.target.closest('.gchip'); if(!b) return; goalFilter=b.dataset.goal;
+  const vis=SPREAD_META.filter(m=>goalFilter==='all'||m[2].includes(goalFilter));
+  if(!vis.some(m=>m[0]===spreadType)){ spreadType=vis[0][0]; positionsConfig=SPREADS[spreadType]; }
+  buildSpreadRow(); });
+spreadRow.addEventListener('click', ()=>{ el('spreadHint').textContent = spreadHint(SPREADS[spreadType].length); });
+qInput.addEventListener('input', ()=>{ const v=qInput.value; const multi=(v.match(/\?/g)||[]).length>=2 || /\bчи\b.+\b(і|та|а також)\s+чи\b/i.test(v); el('qWarn').hidden=!multi; });
+buildSpreadRow();
 
 function fisherYates(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
 
@@ -1980,7 +2009,7 @@ function slotHTML(idx, extraClass){
       ${mn.reversed?'<div class="rv">переверн.</div>':''}
     </div>`;
   } else {
-    wrap.innerHTML = `<div class="slotnum">${idx+1}</div><div>${cfg.label}</div>`;
+    wrap.innerHTML = `<div class="slotnum">${idx+1}</div><div>${cfg.label}</div>${cfg.q?`<div class="slotq">${cfg.q}</div>`:''}`;
   }
   return wrap;
 }
@@ -1990,7 +2019,7 @@ function renderBoard(){
   if(spreadType==='1'){
     const d=document.createElement('div'); d.id='single';
     d.appendChild(slotHTML(0)); board.appendChild(d);
-  } else if(positionsConfig.length===3){
+  } else if(positionsConfig.length===3 && spreadType!=='t3'){
     const d=document.createElement('div'); d.id='row3';
     positionsConfig.forEach((_,i)=>d.appendChild(slotHTML(i)));
     board.appendChild(d);
@@ -2013,7 +2042,8 @@ function renderFanLabel(){
     const parent = nodes.find(n=>n.id===pendingClarifyParentId);
     fanLabel.textContent = `Витягни карту-уточнення для «${DECK[parent.deckIdx].name}»`;
   } else if(mainNodes().length < positionsConfig.length){
-    fanLabel.textContent = `Обери карту для позиції: ${positionsConfig[mainNodes().length].label}`;
+    const pc=positionsConfig[mainNodes().length];
+    fanLabel.textContent = `Обери карту для позиції: ${pc.label}${pc.q?' — '+pc.q:''}`;
   } else {
     fanLabel.textContent = 'Розклад заповнено. Торкнись картки вище, щоб уточнити її додатковою картою.';
   }
@@ -2075,6 +2105,7 @@ function openDetail(nodeId, isFreshDraw){
 
   detail.innerHTML = `
     <div class="dpos">${posLabel}</div>
+    ${node.parentId===null && positionsConfig[node.posIndex].q ? `<div class="dposq">${positionsConfig[node.posIndex].q}</div>` : ''}
     <div class="dtitle" style="margin-bottom:10px;">
       <div class="dnum">${c.arcana==='major'?'Старший Аркан '+c.n:c.n}</div>
       <h2 style="margin:2px 0;">${c.name}</h2>
@@ -2589,15 +2620,21 @@ const LAYOUTS = {
   '8-week':{cols:8,rows:7,pairs:[1,2,3,4,5,6,7].map(k=>[0,k]),slots:[[4,3],[6,2],[2,4],[6,4],[2,2],[5,6],[4,1],[3,6]]},
   '8-month':{cols:8,rows:8,pairs:[[0,4],[1,5],[2,6],[3,7],[0,1],[1,2],[2,3]],slots:[0,1,2,3,4,5,6,7].map(k=>k<4?[3,k*2+1]:[5,(k-4)*2+1])},
   '10':{cols:8,rows:8,slots:H7,cross:1},
+  't3':{cols:8,rows:4,pairs:[[0,1],[0,2]],slots:[[4,1],[2,3],[6,3]]},
+  'work6':{cols:6,rows:4,slots:[[1,1],[3,1],[5,1],[1,3],[3,3],[5,3]]},
+  'growth6':{cols:6,rows:6,slots:[[1,1],[3,1],[5,1],[2,3],[4,3],[3,5]]},
+  'tree7':{cols:8,rows:8,pairs:[[0,1],[0,2],[1,3],[2,3],[3,4],[3,5],[4,6],[5,6]],slots:[[4,1],[2,3],[6,3],[4,4],[2,6],[6,6],[4,7]]},
+  'year13':(function(){ const sl=[[9,9]]; for(let m=1;m<=12;m++){ const a=(-90+30*m)*Math.PI/180; sl.push([Math.round((2+2.05*Math.cos(a))*4)+1, Math.round((2+2.05*Math.sin(a))*4)+1]); }
+     return {cols:20,span:4,rows:21,slots:sl,pairs:[1,2,3,4,5,6,7,8,9,10,11,12].map(k=>[0,k])}; })(),
 };
 function applyLayout(){
   const L=LAYOUTS[spreadType]; const grid=board.querySelector('.genericGrid');
   if(!L || !grid) return;
   grid.className='fxLayout';
-  const W=Math.min(board.clientWidth||360,460), cardW=W/(L.cols/2)-8, rowH=(cardW/0.68+8)/2;
+  const sp=L.span||2, W=Math.min(board.clientWidth||360,460), cardW=W/(L.cols/sp)-8, rowH=(cardW/0.68+8)/sp;
   grid.style.gridTemplateColumns=`repeat(${L.cols},1fr)`; grid.style.gridTemplateRows=`repeat(${L.rows},${rowH}px)`;
   [...grid.children].forEach((s,i)=>{ const p=L.slots[i]; if(!p) return;
-    s.style.gridColumn=`${p[0]} / span 2`; s.style.gridRow=`${p[1]} / span 2`;
+    s.style.gridColumn=`${p[0]} / span ${sp}`; s.style.gridRow=`${p[1]} / span ${sp}`;
     if(L.cross===i) s.classList.add('fxCross'); });
 }
 function drawLines(){
